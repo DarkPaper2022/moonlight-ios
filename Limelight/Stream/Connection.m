@@ -42,6 +42,8 @@ static SDL_AudioDeviceID audioDevice;
 static OPUS_MULTISTREAM_CONFIGURATION audioConfig;
 static void* audioBuffer;
 static int audioFrameSize;
+static int maxPendingAudioMs = 150;
+static int maxQueuedAudioFrames = 30;
 
 static VideoDecoderRenderer* renderer;
 
@@ -238,6 +240,14 @@ int ArInit(int audioConfiguration, POPUS_MULTISTREAM_CONFIGURATION opusConfig, v
         ArCleanup();
         return -1;
     }
+
+    NSInteger valPending = [[NSUserDefaults standardUserDefaults] integerForKey:@"maxPendingAudioDurationMs"];
+    maxPendingAudioMs = (valPending > 0) ? (int)valPending : 150;
+
+    NSInteger valQueued = [[NSUserDefaults standardUserDefaults] integerForKey:@"maxQueuedAudioFrames"];
+    maxQueuedAudioFrames = (valQueued > 0) ? (int)valQueued : 30;
+
+    Log(LOG_I, @"Audio jitter buffer configured: maxPendingAudioDurationMs=%d, maxQueuedAudioFrames=%d", maxPendingAudioMs, maxQueuedAudioFrames);
     
     opusDecoder = opus_multistream_decoder_create(opusConfig->sampleRate,
                                                   opusConfig->channelCount,
@@ -284,9 +294,10 @@ void ArDecodeAndPlaySample(char* sampleData, int sampleLength)
 {
     int decodeLen;
     
-    // Don't queue if there's already more than 30 ms of audio data waiting
-    // in Moonlight's audio queue.
-    if (LiGetPendingAudioDuration() > 30) {
+    // Don't drop packets unless Moonlight's audio queue backlog exceeds the safety threshold.
+    // Relaxed from 30 ms to maxPendingAudioMs (default 150 ms) to avoid dropping audio bursts
+    // after Wi-Fi jitter or AWDL off-channel scans.
+    if (LiGetPendingAudioDuration() > maxPendingAudioMs) {
         return;
     }
     
@@ -294,8 +305,8 @@ void ArDecodeAndPlaySample(char* sampleData, int sampleLength)
                                         (short*)audioBuffer, audioConfig.samplesPerFrame, 0);
     if (decodeLen > 0) {
         // Provide backpressure on the queue to ensure too many frames don't build up
-        // in SDL's audio queue.
-        while (SDL_GetQueuedAudioSize(audioDevice) / audioFrameSize > 10) {
+        // in SDL's audio queue. Relaxed from 10 frames (~50 ms) to maxQueuedAudioFrames (default 30 frames, ~150 ms).
+        while (SDL_GetQueuedAudioSize(audioDevice) / audioFrameSize > maxQueuedAudioFrames) {
             SDL_Delay(1);
         }
         
