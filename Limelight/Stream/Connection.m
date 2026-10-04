@@ -43,9 +43,9 @@ static SDL_AudioDeviceID audioDevice;
 static OPUS_MULTISTREAM_CONFIGURATION audioConfig;
 static void* audioBuffer;
 static int audioFrameSize;
-static int maxPendingAudioMs = 1000;
-static int maxQueuedAudioFrames = 160;
-static int targetReservoirMs = 500;
+static int maxPendingAudioMs = 500;
+static int maxQueuedAudioFrames = 72;
+static int targetReservoirMs = 160;
 static int targetReservoirBytes = 0;
 static BOOL audioPlaybackStarted = NO;
 static uint64_t totalDecodedFrames = 0;
@@ -248,7 +248,7 @@ int ArInit(int audioConfiguration, POPUS_MULTISTREAM_CONFIGURATION opusConfig, v
     }
 
     NSInteger valReservoir = [[NSUserDefaults standardUserDefaults] integerForKey:@"targetAudioBufferMs"];
-    targetReservoirMs = (valReservoir > 0) ? (int)valReservoir : 500;
+    targetReservoirMs = (valReservoir > 0) ? (int)valReservoir : 160;
 
     int frameDurationMs = (opusConfig->samplesPerFrame * 1000) / opusConfig->sampleRate;
     if (frameDurationMs <= 0) frameDurationMs = 5;
@@ -256,10 +256,10 @@ int ArInit(int audioConfiguration, POPUS_MULTISTREAM_CONFIGURATION opusConfig, v
     targetReservoirBytes = targetFrames * audioFrameSize;
 
     NSInteger valQueued = [[NSUserDefaults standardUserDefaults] integerForKey:@"maxQueuedAudioFrames"];
-    maxQueuedAudioFrames = (valQueued > 0) ? (int)valQueued : (targetFrames + 60);
+    maxQueuedAudioFrames = (valQueued > 0) ? (int)valQueued : (targetFrames + 40);
 
     NSInteger valPending = [[NSUserDefaults standardUserDefaults] integerForKey:@"maxPendingAudioDurationMs"];
-    maxPendingAudioMs = (valPending > 0) ? (int)valPending : 1000;
+    maxPendingAudioMs = (valPending > 0) ? (int)valPending : 500;
 
     audioPlaybackStarted = NO;
     totalDecodedFrames = 0;
@@ -318,8 +318,6 @@ void ArDecodeAndPlaySample(char* sampleData, int sampleLength)
     int decodeLen;
     
     // Don't drop packets unless Moonlight's audio queue backlog exceeds the safety threshold.
-    // Relaxed to maxPendingAudioMs (default 1000 ms) to avoid dropping audio bursts
-    // after Wi-Fi jitter or AWDL off-channel scans.
     if (LiGetPendingAudioDuration() > maxPendingAudioMs) {
         return;
     }
@@ -329,18 +327,14 @@ void ArDecodeAndPlaySample(char* sampleData, int sampleLength)
     if (decodeLen > 0) {
         Uint32 queuedBefore = SDL_GetQueuedAudioSize(audioDevice);
 
-        // Detect underrun: if playback already started but hardware drained the queue completely,
-        // pause playback to re-fill the reservoir instead of repeatedly tearing on every 5ms sample.
+        // Track hardware starvation if playback is active but queue emptied.
+        // NOTE: We do NOT pause audioDevice mid-stream as CoreAudio stop/start causes pops.
         if (audioPlaybackStarted && queuedBefore == 0) {
-            SDL_PauseAudioDevice(audioDevice, 1);
-            audioPlaybackStarted = NO;
             totalUnderruns++;
-            Log(LOG_W, @"[AudioReservoir] Underrun detected (0 bytes queued). Pausing to re-buffer reservoir (%d ms, underrun #%llu)...",
-                targetReservoirMs, totalUnderruns);
+            Log(LOG_W, @"[AudioReservoir] Starvation detected (0 bytes queued, underrun #%llu)", totalUnderruns);
         }
 
-        // Provide backpressure on the queue to ensure too many frames don't build up
-        // in SDL's audio queue.
+        // Provide backpressure on the queue to ensure too many frames don't build up in SDL's audio queue.
         while (SDL_GetQueuedAudioSize(audioDevice) / audioFrameSize > maxQueuedAudioFrames) {
             SDL_Delay(1);
         }
@@ -352,11 +346,11 @@ void ArDecodeAndPlaySample(char* sampleData, int sampleLength)
         }
 
         Uint32 queuedAfter = SDL_GetQueuedAudioSize(audioDevice);
-        // If device is not yet playing and we have reached the standing reservoir target, start/resume playback!
+        // If device is not yet playing and we have reached the standing reservoir target, start playback!
         if (!audioPlaybackStarted && queuedAfter >= targetReservoirBytes) {
             SDL_PauseAudioDevice(audioDevice, 0);
             audioPlaybackStarted = YES;
-            Log(LOG_I, @"[AudioReservoir] Reservoir filled to %u bytes (~%d ms / target %d ms). Playback resumed smoothly!",
+            Log(LOG_I, @"[AudioReservoir] Reservoir filled to %u bytes (~%d ms / target %d ms). Playback started!",
                 queuedAfter, (int)(queuedAfter * 1000 / (audioConfig.sampleRate * sizeof(short) * audioConfig.channelCount)), targetReservoirMs);
         }
 

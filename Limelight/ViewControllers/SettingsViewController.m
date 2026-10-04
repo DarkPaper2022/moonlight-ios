@@ -273,7 +273,7 @@ BOOL isCustomResolution(CGSize res) {
     [self.scrollView addSubview:reservoirLabel];
 
     CGFloat selectorY = labelY + 28;
-    UISegmentedControl* reservoirSelector = [[UISegmentedControl alloc] initWithItems:@[@"150 ms", @"300 ms", @"500 ms (Rec.)", @"800 ms (Max)"]];
+    UISegmentedControl* reservoirSelector = [[UISegmentedControl alloc] initWithItems:@[@"80 ms", @"120 ms", @"160 ms (Rec.)", @"240 ms"]];
     reservoirSelector.frame = CGRectMake(self.statsOverlaySelector.frame.origin.x, selectorY, self.statsOverlaySelector.frame.size.width, self.statsOverlaySelector.frame.size.height);
     if (@available(iOS 13.0, *)) {
         reservoirSelector.selectedSegmentTintColor = self.statsOverlaySelector.selectedSegmentTintColor;
@@ -282,12 +282,12 @@ BOOL isCustomResolution(CGSize res) {
 
     NSInteger currentReservoir = [[NSUserDefaults standardUserDefaults] integerForKey:@"targetAudioBufferMs"];
     if (currentReservoir <= 0) {
-        currentReservoir = 500;
+        currentReservoir = 160;
     }
-    int selectedIndex = 2; // Default 500ms
-    if (currentReservoir <= 200) selectedIndex = 0;
-    else if (currentReservoir <= 380) selectedIndex = 1;
-    else if (currentReservoir <= 650) selectedIndex = 2;
+    int selectedIndex = 2; // Default 160ms
+    if (currentReservoir <= 100) selectedIndex = 0;
+    else if (currentReservoir <= 140) selectedIndex = 1;
+    else if (currentReservoir <= 200) selectedIndex = 2;
     else selectedIndex = 3;
 
     [reservoirSelector setSelectedSegmentIndex:selectedIndex];
@@ -296,7 +296,7 @@ BOOL isCustomResolution(CGSize res) {
 }
 
 - (void) reservoirChanged:(UISegmentedControl*)sender {
-    int values[] = {150, 300, 500, 800};
+    int values[] = {80, 120, 160, 240};
     int chosenMs = values[sender.selectedSegmentIndex];
     [[NSUserDefaults standardUserDefaults] setInteger:chosenMs forKey:@"targetAudioBufferMs"];
     [[NSUserDefaults standardUserDefaults] synchronize];
