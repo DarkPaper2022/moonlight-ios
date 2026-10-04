@@ -44,6 +44,9 @@ static void* audioBuffer;
 static int audioFrameSize;
 static int maxPendingAudioMs = 150;
 static int maxQueuedAudioFrames = 30;
+static int targetReservoirMs = 70;
+static int targetReservoirBytes = 0;
+static BOOL audioPlaybackStarted = NO;
 
 static VideoDecoderRenderer* renderer;
 
@@ -247,7 +250,17 @@ int ArInit(int audioConfiguration, POPUS_MULTISTREAM_CONFIGURATION opusConfig, v
     NSInteger valQueued = [[NSUserDefaults standardUserDefaults] integerForKey:@"maxQueuedAudioFrames"];
     maxQueuedAudioFrames = (valQueued > 0) ? (int)valQueued : 30;
 
-    Log(LOG_I, @"Audio jitter buffer configured: maxPendingAudioDurationMs=%d, maxQueuedAudioFrames=%d", maxPendingAudioMs, maxQueuedAudioFrames);
+    NSInteger valReservoir = [[NSUserDefaults standardUserDefaults] integerForKey:@"targetAudioBufferMs"];
+    targetReservoirMs = (valReservoir > 0) ? (int)valReservoir : 70;
+
+    int frameDurationMs = (opusConfig->samplesPerFrame * 1000) / opusConfig->sampleRate;
+    if (frameDurationMs <= 0) frameDurationMs = 5;
+    int targetFrames = (targetReservoirMs + frameDurationMs - 1) / frameDurationMs;
+    targetReservoirBytes = targetFrames * audioFrameSize;
+    audioPlaybackStarted = NO;
+
+    Log(LOG_I, @"Audio reservoir configured: targetReservoirMs=%d (%d frames, %d bytes), maxPendingMs=%d, maxQueuedFrames=%d",
+        targetReservoirMs, targetFrames, targetReservoirBytes, maxPendingAudioMs, maxQueuedAudioFrames);
     
     opusDecoder = opus_multistream_decoder_create(opusConfig->sampleRate,
                                                   opusConfig->channelCount,
@@ -261,8 +274,9 @@ int ArInit(int audioConfiguration, POPUS_MULTISTREAM_CONFIGURATION opusConfig, v
         return -1;
     }
     
-    // Start playback
-    SDL_PauseAudioDevice(audioDevice, 0);
+    // Notice: Do NOT unpause audioDevice here!
+    // We keep audioDevice paused until the initial pre-buffering reservoir (targetReservoirBytes) is filled,
+    // ensuring hardware DAC never starts in an empty starvation state.
     
     // Disable lowering volume of other audio streams (SDL sets AVAudioSessionCategoryOptionDuckOthers by default)
     [[AVAudioSession sharedInstance] setCategory:AVAudioSessionCategoryPlayback withOptions:AVAudioSessionCategoryOptionMixWithOthers error:nil];
@@ -272,6 +286,7 @@ int ArInit(int audioConfiguration, POPUS_MULTISTREAM_CONFIGURATION opusConfig, v
 
 void ArCleanup(void)
 {
+    audioPlaybackStarted = NO;
     if (opusDecoder != NULL) {
         opus_multistream_decoder_destroy(opusDecoder);
         opusDecoder = NULL;
@@ -304,6 +319,16 @@ void ArDecodeAndPlaySample(char* sampleData, int sampleLength)
     decodeLen = opus_multistream_decode(opusDecoder, (unsigned char *)sampleData, sampleLength,
                                         (short*)audioBuffer, audioConfig.samplesPerFrame, 0);
     if (decodeLen > 0) {
+        Uint32 queuedBefore = SDL_GetQueuedAudioSize(audioDevice);
+
+        // Detect underrun: if playback already started but hardware drained the queue completely,
+        // pause playback to re-fill the reservoir instead of repeatedly tearing on every 5ms sample.
+        if (audioPlaybackStarted && queuedBefore == 0) {
+            SDL_PauseAudioDevice(audioDevice, 1);
+            audioPlaybackStarted = NO;
+            Log(LOG_W, @"[AudioReservoir] Underrun detected (0 bytes queued). Pausing to refill reservoir (%d ms)...", targetReservoirMs);
+        }
+
         // Provide backpressure on the queue to ensure too many frames don't build up
         // in SDL's audio queue. Relaxed from 10 frames (~50 ms) to maxQueuedAudioFrames (default 30 frames, ~150 ms).
         while (SDL_GetQueuedAudioSize(audioDevice) / audioFrameSize > maxQueuedAudioFrames) {
@@ -314,6 +339,15 @@ void ArDecodeAndPlaySample(char* sampleData, int sampleLength)
                            audioBuffer,
                            sizeof(short) * decodeLen * audioConfig.channelCount) < 0) {
             Log(LOG_E, @"Failed to queue audio sample: %s\n", SDL_GetError());
+        }
+
+        Uint32 queuedAfter = SDL_GetQueuedAudioSize(audioDevice);
+        // If device is paused and we have reached the standing reservoir target, start playback!
+        if (!audioPlaybackStarted && queuedAfter >= targetReservoirBytes) {
+            SDL_PauseAudioDevice(audioDevice, 0);
+            audioPlaybackStarted = YES;
+            Log(LOG_I, @"[AudioReservoir] Reservoir filled to %u bytes (~%d ms). Playback resumed smoothly!",
+                queuedAfter, (int)(queuedAfter * 1000 / (audioConfig.sampleRate * sizeof(short) * audioConfig.channelCount)));
         }
     }
 }
