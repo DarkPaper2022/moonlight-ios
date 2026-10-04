@@ -7,6 +7,7 @@
 //
 
 #import "Logger.h"
+#import <os/log.h>
 
 static LogLevel LoggerLogLevel = LOG_I;
 
@@ -57,5 +58,7 @@ void LogTagv(LogLevel level, NSString* tag, NSString* fmt, va_list args) {
     } else {
         prefixedString = [NSString stringWithFormat:@"%@ %@", levelPrefix, fmt];
     }
-    NSLogv(prefixedString, args);
+    NSString* fullMessage = [[NSString alloc] initWithFormat:prefixedString arguments:args];
+    os_log_with_type(OS_LOG_DEFAULT, OS_LOG_TYPE_DEFAULT, "%{public}s", [fullMessage UTF8String]);
+    fprintf(stderr, "%s\n", [fullMessage UTF8String]);
 }
