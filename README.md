@@ -8,6 +8,18 @@ Moonlight also has a [PC client](https://github.com/moonlight-stream/moonlight-q
 
 Check out [the Moonlight wiki](https://github.com/moonlight-stream/moonlight-docs/wiki) for more detailed project information, setup guide, or troubleshooting steps.
 
+## Fork additions: audio anti-jitter (AudioBurstGuard)
+
+This is a fork of `moonlight-stream/moonlight-ios` adding an audio
+recovery stack for lossy wireless links (e.g. Apple AWDL coexistence
+blackouts): fixed-delay playout scheduling, a tunable jitter reservoir,
+continuous PLC concealment, and the deadline-driven AudioBurstGuard
+(temporal duplicate recovery + RS FEC + live loss statistics) built on
+our `moonlight-common-c` fork.
+
+See [docs/audio-burst-guard.md](docs/audio-burst-guard.md) for the
+client integration details and expected behavior.
+
 [![Moonlight for iOS and tvOS](https://moonlight-stream.org/images/App_Store_Badge_135x40.svg)](https://apps.apple.com/us/app/moonlight-game-streaming/id1000551566)
 
 ## Building
