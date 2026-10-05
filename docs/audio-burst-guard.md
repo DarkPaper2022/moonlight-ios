@@ -18,8 +18,9 @@ frames — audible as cracks/pops that plain jitter buffers cannot hide.
 - `Connection.m` enables `LiSetAudioBurstGuardEnabled(true)` for every
   stream, with a 150ms recovery window and a 20ms SDL output cushion.
 - The audio path uses a fixed-delay playout scheduler (150ms default)
-  paced on a monotonic clock; the reservoir size remains tunable
-  in-app (`targetAudioBufferMs`).
+  paced on a monotonic clock. The playout delay is tunable in-app via a
+  snapped slider (20-500 ms, like the bitrate slider) in Settings →
+  "Audio Playout Delay"; 150 ms is marked as recommended.
 - Missing frames synthesize a single PLC frame each, keeping the
   decoder timeline continuous through bursts.
 - The stats overlay renders live audio loss rate: lost vs recovered

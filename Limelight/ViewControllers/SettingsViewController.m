@@ -16,11 +16,33 @@
 @implementation SettingsViewController {
     NSInteger _bitrate;
     NSInteger _lastSelectedResolutionIndex;
+    UISlider* _reservoirSlider;
+    UILabel* _reservoirLabel;
+    UILabel* _reservoirValueLabel;
 }
 
 @dynamic overrideUserInterfaceStyle;
 
 static NSString* bitrateFormat = @"Bitrate: %.1f Mbps";
+static NSString* delayFormat = @"Audio Playout Delay: %d ms%@";
+static const int audioDelayTable[] = {
+    20,
+    40,
+    60,
+    80,
+    100,
+    120,
+    150,
+    200,
+    250,
+    300,
+    350,
+    400,
+    450,
+    500,
+};
+#define AUDIO_DELAY_RECOMMENDED_INDEX 6 /* 150 ms */
+#define AUDIO_DELAY_DEFAULT_MS 150
 static const int bitrateTable[] = {
     500,
     1000,
@@ -59,6 +81,19 @@ CGSize resolutionTable[RESOLUTION_TABLE_SIZE];
     
     for (i = 0; i < (sizeof(bitrateTable) / sizeof(*bitrateTable)); i++) {
         if (bitrate <= bitrateTable[i]) {
+            return i;
+        }
+    }
+    
+    // Return the last entry in the table
+    return i - 1;
+}
+
+-(int)getSliderValueForDelay:(NSInteger)delay {
+    int i;
+    
+    for (i = 0; i < (sizeof(audioDelayTable) / sizeof(*audioDelayTable)); i++) {
+        if (delay <= audioDelayTable[i]) {
             return i;
         }
     }
@@ -264,42 +299,51 @@ BOOL isCustomResolution(CGSize res) {
     [self updateBitrateText];
     [self updateResolutionDisplayViewText];
 
-    // Setup Audio Anti-Jitter Reservoir UI dynamically below stats overlay
+    // Setup Audio Anti-Jitter Reservoir UI dynamically below stats overlay.
+    // A snapped slider (like bitrate) covering 20..500 ms.
     CGFloat labelY = self.statsOverlaySelector.frame.origin.y + self.statsOverlaySelector.frame.size.height + 15;
     UILabel* reservoirLabel = [[UILabel alloc] initWithFrame:CGRectMake(self.statsOverlaySelector.frame.origin.x, labelY, self.statsOverlaySelector.frame.size.width, 21)];
-    reservoirLabel.text = @"Audio Playout Delay (音频延后调度器)";
     reservoirLabel.textColor = [UIColor colorWithRed:0.939 green:0.962 blue:1.0 alpha:1.0];
     reservoirLabel.font = [UIFont systemFontOfSize:17];
     [self.scrollView addSubview:reservoirLabel];
-
-    CGFloat selectorY = labelY + 28;
-    UISegmentedControl* reservoirSelector = [[UISegmentedControl alloc] initWithItems:@[@"80 ms", @"120 ms", @"150 ms (Rec.)", @"200 ms"]];
-    reservoirSelector.frame = CGRectMake(self.statsOverlaySelector.frame.origin.x, selectorY, self.statsOverlaySelector.frame.size.width, self.statsOverlaySelector.frame.size.height);
-    if (@available(iOS 13.0, *)) {
-        reservoirSelector.selectedSegmentTintColor = self.statsOverlaySelector.selectedSegmentTintColor;
-    }
-    reservoirSelector.tintColor = self.statsOverlaySelector.tintColor;
+    _reservoirLabel = reservoirLabel;
 
     NSInteger currentReservoir = [[NSUserDefaults standardUserDefaults] integerForKey:@"targetAudioBufferMs"];
     if (currentReservoir <= 0) {
-        currentReservoir = 150;
+        currentReservoir = AUDIO_DELAY_DEFAULT_MS;
     }
-    int selectedIndex = 2; // Default 150ms
-    if (currentReservoir <= 100) selectedIndex = 0;
-    else if (currentReservoir <= 135) selectedIndex = 1;
-    else if (currentReservoir <= 175) selectedIndex = 2;
-    else selectedIndex = 3;
+    _reservoirSlider = [[UISlider alloc] initWithFrame:CGRectMake(self.statsOverlaySelector.frame.origin.x, labelY + 26, self.statsOverlaySelector.frame.size.width, 31)];
+    [_reservoirSlider setMinimumValue:0];
+    [_reservoirSlider setMaximumValue:(sizeof(audioDelayTable) / sizeof(*audioDelayTable)) - 1];
+    [_reservoirSlider setValue:[self getSliderValueForDelay:currentReservoir] animated:YES];
+    [_reservoirSlider addTarget:self action:@selector(reservoirSliderMoved) forControlEvents:UIControlEventValueChanged];
+    if (@available(iOS 13.0, *)) {
+        _reservoirSlider.tintColor = self.statsOverlaySelector.tintColor;
+    }
+    [self.scrollView addSubview:_reservoirSlider];
 
-    [reservoirSelector setSelectedSegmentIndex:selectedIndex];
-    [reservoirSelector addTarget:self action:@selector(reservoirChanged:) forControlEvents:UIControlEventValueChanged];
-    [self.scrollView addSubview:reservoirSelector];
+    _reservoirValueLabel = [[UILabel alloc] initWithFrame:CGRectMake(self.statsOverlaySelector.frame.origin.x, labelY + 58, self.statsOverlaySelector.frame.size.width, 21)];
+    _reservoirValueLabel.textColor = [UIColor colorWithRed:0.70 green:0.73 blue:0.78 alpha:1.0];
+    _reservoirValueLabel.font = [UIFont systemFontOfSize:13];
+    [self.scrollView addSubview:_reservoirValueLabel];
+    [self updateReservoirText];
 }
 
-- (void) reservoirChanged:(UISegmentedControl*)sender {
-    int values[] = {80, 120, 150, 200};
-    int chosenMs = values[sender.selectedSegmentIndex];
-    [[NSUserDefaults standardUserDefaults] setInteger:chosenMs forKey:@"targetAudioBufferMs"];
+- (void) reservoirSliderMoved {
+    int index = (int)(_reservoirSlider.value + 0.5); // snap to the nearest notch
+    assert(index < (int)(sizeof(audioDelayTable) / sizeof(*audioDelayTable)));
+    [_reservoirSlider setValue:index animated:NO];
+    [[NSUserDefaults standardUserDefaults] setInteger:audioDelayTable[index] forKey:@"targetAudioBufferMs"];
     [[NSUserDefaults standardUserDefaults] synchronize];
+    [self updateReservoirText];
+}
+
+- (void) updateReservoirText {
+    int index = (int)(_reservoirSlider.value + 0.5);
+    int ms = audioDelayTable[index];
+    [_reservoirLabel setText:[NSString stringWithFormat:delayFormat, ms,
+                             index == AUDIO_DELAY_RECOMMENDED_INDEX ? @" (Recommended)" : @""]];
+    [_reservoirValueLabel setText:@"Higher values absorb worse networks at the cost of latency (20-500 ms)"];
 }
 
 - (void) touchModeChanged {
