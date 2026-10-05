@@ -250,15 +250,17 @@ int ArInit(int audioConfiguration, POPUS_MULTISTREAM_CONFIGURATION opusConfig, v
     NSInteger valReservoir = [[NSUserDefaults standardUserDefaults] integerForKey:@"targetAudioBufferMs"];
     targetReservoirMs = (valReservoir > 0) ? (int)valReservoir : 150;
 
-    // Configure moonlight-common-c fixed-delay playout scheduler!
+    // Enable AudioBurstGuard with 150ms recovery window and 20ms SDL queue
+    LiSetAudioBurstGuardEnabled(true);
+    LiSetAudioRecoveryWindowMs((uint32_t)targetReservoirMs);
+    LiSetAudioPcmQueueMs(20);
     LiSetAudioPlayoutDelayMs((uint32_t)targetReservoirMs);
 
     int frameDurationMs = (opusConfig->samplesPerFrame * 1000) / opusConfig->sampleRate;
     if (frameDurationMs <= 0) frameDurationMs = 5;
     
-    // In SDL, keep a solid safety cushion (8 frames = ~40ms) to absorb iOS CoreAudio DMA pull jitter.
-    // The main jitter buffer is handled upstream by AudioStream.c!
-    int safetyFrames = 8;
+    // In SDL, keep a solid short cushion (4 frames = ~20ms) as requested by AudioBurstGuard spec
+    int safetyFrames = 4;
     targetReservoirBytes = safetyFrames * audioFrameSize;
 
     NSInteger valQueued = [[NSUserDefaults standardUserDefaults] integerForKey:@"maxQueuedAudioFrames"];
