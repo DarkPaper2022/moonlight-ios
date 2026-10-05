@@ -177,14 +177,34 @@
     else {
         hostProcessingString = @"";
     }
+
+    AUDIO_STATS audioStats;
+    NSString* audioString;
+    if (LiGetAudioStats(&audioStats) && audioStats.totalFrames > 0) {
+        if (audioStats.duplicateFrames > 0) {
+            audioString = [NSString stringWithFormat:@"\nAudio loss rate (PLC): %.2f%% (lost: %llu/%llu, recovered: %llu)",
+                           audioStats.lossRatePercent,
+                           (unsigned long long)audioStats.plcFrames,
+                           (unsigned long long)audioStats.totalFrames,
+                           (unsigned long long)audioStats.duplicateFrames];
+        } else {
+            audioString = [NSString stringWithFormat:@"\nAudio loss rate (PLC): %.2f%% (lost: %llu/%llu)",
+                           audioStats.lossRatePercent,
+                           (unsigned long long)audioStats.plcFrames,
+                           (unsigned long long)audioStats.totalFrames];
+        }
+    } else {
+        audioString = @"";
+    }
     
     float interval = stats.endTime - stats.startTime;
-    return [NSString stringWithFormat:@"Video stream: %dx%d %.2f FPS (Codec: %@)\nFrames dropped by your network connection: %.2f%%\nAverage network latency: %@%@",
+    return [NSString stringWithFormat:@"Video stream: %dx%d %.2f FPS (Codec: %@)\nFrames dropped by your network connection: %.2f%%%@\nAverage network latency: %@%@",
             _config.width,
             _config.height,
             stats.totalFrames / interval,
             [_connection getActiveCodecName],
             stats.networkDroppedFrames / interval,
+            audioString,
             latencyString,
             hostProcessingString];
 }
