@@ -15,7 +15,7 @@
 		9857AF081EBE85E10084F99E /* rs.c in Sources */ = {isa = PBXBuildFile; fileRef = 9857AF011EBE85E10084F99E /* rs.c */; };
 		9857AF091EBE85E10084F99E /* oblas_common.c in Sources */ = {isa = PBXBuildFile; fileRef = 9857AF031EBE85E10084F99E /* oblas_common.c */; };
 		9857AF0A1EBE85E10084F99E /* oblas_lite.c in Sources */ = {isa = PBXBuildFile; fileRef = 9857AF041EBE85E10084F99E /* oblas_lite.c */; };
-		98AB2E3F1CAD425A0089BB98 /* AudioBurstRecovery.c in Sources */ = {isa = PBXBuildFile; fileRef = 98AB2E191CAD423B0089BB98 /* AudioBurstRecovery.c */; };
+		98AB2E3F1CAD425A0089BB98 /* AudioBurstRecovery.c in Sources */ = {isa = PBXBuildFile; fileRef = 98AB2E182CAD423B0089BB98 /* AudioBurstRecovery.c */; };
 		98AB2E401CAD425A0089BB98 /* AudioStream.c in Sources */ = {isa = PBXBuildFile; fileRef = 98AB2E1A1CAD423B0089BB98 /* AudioStream.c */; };
 		98AB2E411CAD425A0089BB98 /* ByteBuffer.c in Sources */ = {isa = PBXBuildFile; fileRef = 98AB2E1B1CAD423B0089BB98 /* ByteBuffer.c */; };
 		98AB2E421CAD425A0089BB98 /* Connection.c in Sources */ = {isa = PBXBuildFile; fileRef = 98AB2E1D1CAD423B0089BB98 /* Connection.c */; };
@@ -50,7 +50,7 @@
 		98F145382667D847004018E3 /* RtpVideoQueue.c in Sources */ = {isa = PBXBuildFile; fileRef = 98F145342667D847004018E3 /* RtpVideoQueue.c */; };
 		F74BEF9F2C1A707200224667 /* OpenSSL in Frameworks */ = {isa = PBXBuildFile; productRef = F74BEF9E2C1A707200224667 /* OpenSSL */; };
 		F74BEFA22C1A80D000224667 /* OpenSSL in Frameworks */ = {isa = PBXBuildFile; productRef = F74BEFA12C1A80D000224667 /* OpenSSL */; };
-		FB1A67F921324F4900507771 /* AudioBurstRecovery.c in Sources */ = {isa = PBXBuildFile; fileRef = 98AB2E191CAD423B0089BB98 /* AudioBurstRecovery.c */; };
+		FB1A67F921324F4900507771 /* AudioBurstRecovery.c in Sources */ = {isa = PBXBuildFile; fileRef = 98AB2E182CAD423B0089BB98 /* AudioBurstRecovery.c */; };
 		FB1A67FA21324F4900507771 /* AudioStream.c in Sources */ = {isa = PBXBuildFile; fileRef = 98AB2E1A1CAD423B0089BB98 /* AudioStream.c */; };
 		FB1A67FB21324F4900507771 /* ByteBuffer.c in Sources */ = {isa = PBXBuildFile; fileRef = 98AB2E1B1CAD423B0089BB98 /* ByteBuffer.c */; };
 		FB1A67FC21324F4900507771 /* Connection.c in Sources */ = {isa = PBXBuildFile; fileRef = 98AB2E1D1CAD423B0089BB98 /* Connection.c */; };
@@ -132,7 +132,7 @@
 		98AB2E161CAD422B0089BB98 /* README */ = {isa = PBXFileReference; lastKnownFileType = text; path = README; sourceTree = "<group>"; };
 		98AB2E171CAD422B0089BB98 /* unix.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = unix.c; sourceTree = "<group>"; };
 		98AB2E181CAD422B0089BB98 /* win32.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = win32.c; sourceTree = "<group>"; };
-		98AB2E191CAD423B0089BB98 /* AudioBurstRecovery.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = AudioBurstRecovery.c; sourceTree = "<group>"; };
+		98AB2E182CAD423B0089BB98 /* AudioBurstRecovery.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = AudioBurstRecovery.c; sourceTree = "<group>"; };
 		98AB2E192CAD423B0089BB98 /* AudioBurstRecovery.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AudioBurstRecovery.h; sourceTree = "<group>"; };
 		98AB2E1A1CAD423B0089BB98 /* AudioStream.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = AudioStream.c; sourceTree = "<group>"; };
 		98AB2E1B1CAD423B0089BB98 /* ByteBuffer.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ByteBuffer.c; sourceTree = "<group>"; };
@@ -285,7 +285,7 @@
 				98F145392667D852004018E3 /* RtpVideoQueue.h */,
 				98F145332667D847004018E3 /* RtpAudioQueue.c */,
 				98F145342667D847004018E3 /* RtpVideoQueue.c */,
-				98AB2E191CAD423B0089BB98 /* AudioBurstRecovery.c */,
+				98AB2E182CAD423B0089BB98 /* AudioBurstRecovery.c */,
 				98AB2E192CAD423B0089BB98 /* AudioBurstRecovery.h */,
 				98AB2E1A1CAD423B0089BB98 /* AudioStream.c */,
 				98AB2E1B1CAD423B0089BB98 /* ByteBuffer.c */,
