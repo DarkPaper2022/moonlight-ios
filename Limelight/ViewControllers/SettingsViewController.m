@@ -267,13 +267,13 @@ BOOL isCustomResolution(CGSize res) {
     // Setup Audio Anti-Jitter Reservoir UI dynamically below stats overlay
     CGFloat labelY = self.statsOverlaySelector.frame.origin.y + self.statsOverlaySelector.frame.size.height + 15;
     UILabel* reservoirLabel = [[UILabel alloc] initWithFrame:CGRectMake(self.statsOverlaySelector.frame.origin.x, labelY, self.statsOverlaySelector.frame.size.width, 21)];
-    reservoirLabel.text = @"Audio Anti-Jitter Buffer (音频防抖蓄水池)";
+    reservoirLabel.text = @"Audio Playout Delay (音频延后调度器)";
     reservoirLabel.textColor = [UIColor colorWithRed:0.939 green:0.962 blue:1.0 alpha:1.0];
     reservoirLabel.font = [UIFont systemFontOfSize:17];
     [self.scrollView addSubview:reservoirLabel];
 
     CGFloat selectorY = labelY + 28;
-    UISegmentedControl* reservoirSelector = [[UISegmentedControl alloc] initWithItems:@[@"80 ms", @"120 ms", @"160 ms (Rec.)", @"240 ms"]];
+    UISegmentedControl* reservoirSelector = [[UISegmentedControl alloc] initWithItems:@[@"80 ms", @"120 ms", @"150 ms (Rec.)", @"200 ms"]];
     reservoirSelector.frame = CGRectMake(self.statsOverlaySelector.frame.origin.x, selectorY, self.statsOverlaySelector.frame.size.width, self.statsOverlaySelector.frame.size.height);
     if (@available(iOS 13.0, *)) {
         reservoirSelector.selectedSegmentTintColor = self.statsOverlaySelector.selectedSegmentTintColor;
@@ -282,12 +282,12 @@ BOOL isCustomResolution(CGSize res) {
 
     NSInteger currentReservoir = [[NSUserDefaults standardUserDefaults] integerForKey:@"targetAudioBufferMs"];
     if (currentReservoir <= 0) {
-        currentReservoir = 160;
+        currentReservoir = 150;
     }
-    int selectedIndex = 2; // Default 160ms
+    int selectedIndex = 2; // Default 150ms
     if (currentReservoir <= 100) selectedIndex = 0;
-    else if (currentReservoir <= 140) selectedIndex = 1;
-    else if (currentReservoir <= 200) selectedIndex = 2;
+    else if (currentReservoir <= 135) selectedIndex = 1;
+    else if (currentReservoir <= 175) selectedIndex = 2;
     else selectedIndex = 3;
 
     [reservoirSelector setSelectedSegmentIndex:selectedIndex];
@@ -296,7 +296,7 @@ BOOL isCustomResolution(CGSize res) {
 }
 
 - (void) reservoirChanged:(UISegmentedControl*)sender {
-    int values[] = {80, 120, 160, 240};
+    int values[] = {80, 120, 150, 200};
     int chosenMs = values[sender.selectedSegmentIndex];
     [[NSUserDefaults standardUserDefaults] setInteger:chosenMs forKey:@"targetAudioBufferMs"];
     [[NSUserDefaults standardUserDefaults] synchronize];
