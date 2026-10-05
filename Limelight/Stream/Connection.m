@@ -10,6 +10,7 @@
 #import "Utils.h"
 
 #import <VideoToolbox/VideoToolbox.h>
+#import <os/log.h>
 
 #define SDL_MAIN_HANDLED
 #import <SDL.h>
@@ -42,6 +43,13 @@ static SDL_AudioDeviceID audioDevice;
 static OPUS_MULTISTREAM_CONFIGURATION audioConfig;
 static void* audioBuffer;
 static int audioFrameSize;
+static int maxPendingAudioMs = 500;
+static int maxQueuedAudioFrames = 72;
+static int targetReservoirMs = 160;
+static int targetReservoirBytes = 0;
+static BOOL audioPlaybackStarted = NO;
+static uint64_t totalDecodedFrames = 0;
+static uint64_t totalUnderruns = 0;
 
 static VideoDecoderRenderer* renderer;
 
@@ -238,6 +246,27 @@ int ArInit(int audioConfiguration, POPUS_MULTISTREAM_CONFIGURATION opusConfig, v
         ArCleanup();
         return -1;
     }
+
+    NSInteger valReservoir = [[NSUserDefaults standardUserDefaults] integerForKey:@"targetAudioBufferMs"];
+    targetReservoirMs = (valReservoir > 0) ? (int)valReservoir : 160;
+
+    int frameDurationMs = (opusConfig->samplesPerFrame * 1000) / opusConfig->sampleRate;
+    if (frameDurationMs <= 0) frameDurationMs = 5;
+    int targetFrames = (targetReservoirMs + frameDurationMs - 1) / frameDurationMs;
+    targetReservoirBytes = targetFrames * audioFrameSize;
+
+    NSInteger valQueued = [[NSUserDefaults standardUserDefaults] integerForKey:@"maxQueuedAudioFrames"];
+    maxQueuedAudioFrames = (valQueued > 0) ? (int)valQueued : (targetFrames + 40);
+
+    NSInteger valPending = [[NSUserDefaults standardUserDefaults] integerForKey:@"maxPendingAudioDurationMs"];
+    maxPendingAudioMs = (valPending > 0) ? (int)valPending : 500;
+
+    audioPlaybackStarted = NO;
+    totalDecodedFrames = 0;
+    totalUnderruns = 0;
+
+    Log(LOG_I, @"Audio reservoir configured: targetReservoirMs=%d (%d frames, %d bytes), maxPendingMs=%d, maxQueuedFrames=%d",
+        targetReservoirMs, targetFrames, targetReservoirBytes, maxPendingAudioMs, maxQueuedAudioFrames);
     
     opusDecoder = opus_multistream_decoder_create(opusConfig->sampleRate,
                                                   opusConfig->channelCount,
@@ -251,8 +280,9 @@ int ArInit(int audioConfiguration, POPUS_MULTISTREAM_CONFIGURATION opusConfig, v
         return -1;
     }
     
-    // Start playback
-    SDL_PauseAudioDevice(audioDevice, 0);
+    // Notice: Do NOT unpause audioDevice here!
+    // We keep audioDevice paused until the initial pre-buffering reservoir (targetReservoirBytes) is filled,
+    // ensuring hardware DAC never starts in an empty starvation state.
     
     // Disable lowering volume of other audio streams (SDL sets AVAudioSessionCategoryOptionDuckOthers by default)
     [[AVAudioSession sharedInstance] setCategory:AVAudioSessionCategoryPlayback withOptions:AVAudioSessionCategoryOptionMixWithOthers error:nil];
@@ -262,6 +292,9 @@ int ArInit(int audioConfiguration, POPUS_MULTISTREAM_CONFIGURATION opusConfig, v
 
 void ArCleanup(void)
 {
+    audioPlaybackStarted = NO;
+    totalDecodedFrames = 0;
+    totalUnderruns = 0;
     if (opusDecoder != NULL) {
         opus_multistream_decoder_destroy(opusDecoder);
         opusDecoder = NULL;
@@ -284,18 +317,25 @@ void ArDecodeAndPlaySample(char* sampleData, int sampleLength)
 {
     int decodeLen;
     
-    // Don't queue if there's already more than 30 ms of audio data waiting
-    // in Moonlight's audio queue.
-    if (LiGetPendingAudioDuration() > 30) {
+    // Don't drop packets unless Moonlight's audio queue backlog exceeds the safety threshold.
+    if (LiGetPendingAudioDuration() > maxPendingAudioMs) {
         return;
     }
     
     decodeLen = opus_multistream_decode(opusDecoder, (unsigned char *)sampleData, sampleLength,
                                         (short*)audioBuffer, audioConfig.samplesPerFrame, 0);
     if (decodeLen > 0) {
-        // Provide backpressure on the queue to ensure too many frames don't build up
-        // in SDL's audio queue.
-        while (SDL_GetQueuedAudioSize(audioDevice) / audioFrameSize > 10) {
+        Uint32 queuedBefore = SDL_GetQueuedAudioSize(audioDevice);
+
+        // Track hardware starvation if playback is active but queue emptied.
+        // NOTE: We do NOT pause audioDevice mid-stream as CoreAudio stop/start causes pops.
+        if (audioPlaybackStarted && queuedBefore == 0) {
+            totalUnderruns++;
+            Log(LOG_W, @"[AudioReservoir] Starvation detected (0 bytes queued, underrun #%llu)", totalUnderruns);
+        }
+
+        // Provide backpressure on the queue to ensure too many frames don't build up in SDL's audio queue.
+        while (SDL_GetQueuedAudioSize(audioDevice) / audioFrameSize > maxQueuedAudioFrames) {
             SDL_Delay(1);
         }
         
@@ -303,6 +343,22 @@ void ArDecodeAndPlaySample(char* sampleData, int sampleLength)
                            audioBuffer,
                            sizeof(short) * decodeLen * audioConfig.channelCount) < 0) {
             Log(LOG_E, @"Failed to queue audio sample: %s\n", SDL_GetError());
+        }
+
+        Uint32 queuedAfter = SDL_GetQueuedAudioSize(audioDevice);
+        // If device is not yet playing and we have reached the standing reservoir target, start playback!
+        if (!audioPlaybackStarted && queuedAfter >= targetReservoirBytes) {
+            SDL_PauseAudioDevice(audioDevice, 0);
+            audioPlaybackStarted = YES;
+            Log(LOG_I, @"[AudioReservoir] Reservoir filled to %u bytes (~%d ms / target %d ms). Playback started!",
+                queuedAfter, (int)(queuedAfter * 1000 / (audioConfig.sampleRate * sizeof(short) * audioConfig.channelCount)), targetReservoirMs);
+        }
+
+        totalDecodedFrames++;
+        if (totalDecodedFrames % 200 == 0) { // Every ~1 second (200 * 5ms = 1000ms)
+            int queuedMs = (int)(queuedAfter * 1000 / (audioConfig.sampleRate * sizeof(short) * audioConfig.channelCount));
+            Log(LOG_I, @"[AudioReservoir] Status: queued=%d ms (%u B / target %d ms), pendingCommon=%d ms, totalFrames=%llu, underruns=%llu",
+                queuedMs, queuedAfter, targetReservoirMs, LiGetPendingAudioDuration(), totalDecodedFrames, totalUnderruns);
         }
     }
 }
@@ -336,8 +392,11 @@ void ClLogMessage(const char* format, ...)
 {
     va_list va;
     va_start(va, format);
-    vfprintf(stderr, format, va);
+    char buf[1024];
+    vsnprintf(buf, sizeof(buf), format, va);
     va_end(va);
+    os_log_with_type(OS_LOG_DEFAULT, OS_LOG_TYPE_DEFAULT, "[MoonlightCommon] %{public}s", buf);
+    fprintf(stderr, "[MoonlightCommon] %s", buf);
 }
 
 void ClRumble(unsigned short controllerNumber, unsigned short lowFreqMotor, unsigned short highFreqMotor)
