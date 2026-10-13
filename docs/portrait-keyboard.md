@@ -126,7 +126,28 @@ subsequent switches and resizes, stale errors, local rotation only in the
 restricted portrait full-screen case, wide-desktop reproduction, full-viewport
 keyboard video sizing and unchanged full-screen aspect-fit. No sanitizer errors.
 These are portable policy/geometry tests; they do not exercise live UIKit or
-LiveContainer. Apple builds and device acceptance remain pending for 9.0.14.
+LiveContainer.
+
+Apple verification for source `af1954b5c51b81d9168d66b2096f7a4bd33907f7`:
+
+- [CI run 38441921601](https://github.com/DarkPaper2022/moonlight-ios/actions/runs/38441921601):
+  iOS/tvOS Debug and Release simulator builds passed. The first iOS attempt
+  failed during SDK setup with `Unable to connect to simulator` (exit 70);
+  rerunning only the failed job succeeded. Both portable tests passed with
+  Apple clang.
+- [IPA run 38441951479](https://github.com/DarkPaper2022/moonlight-ios/actions/runs/38441951479):
+  unsigned iOS device Release build and package upload succeeded.
+- Package: `artifacts/Moonlight-PortraitKeyboard-v9.0.14.ipa` in the companion
+  workspace, 3,121,379 bytes. SHA-256:
+  `3b0da4253edba460902677907d1ae8134bb829c6393c0738fa1b8a1f477040ae`.
+- Published in the companion `ipa-playground` Nginx directory and synchronized
+  its config, source, homepage and cache. The live HTTPS source advertises
+  9.0.14; homepage links match; complete IPA download matches size and SHA-256.
+  The updater's `--check` reports the local 9.0.14 entry as current.
+
+Conclusion: builds, regression tests and source publication pass. Actual
+LiveContainer/iPad rotation, layout and touch alignment still need device
+confirmation.
 
 ## Device acceptance checklist
 
