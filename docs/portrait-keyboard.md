@@ -1,6 +1,6 @@
 # Portrait streaming and directional keyboard control
 
-Version: 9.0.13. Base: `v9.0.11-audiodelay` (`0cd848e`).
+Version: 9.0.14. Base: `v9.0.11-audiodelay` (`0cd848e`).
 The common-c gitlink remains `19d67932d77b5c86c7553b91b0294081573c60e2`;
 this feature does not change the 9.0.11 audio implementation or host configuration.
 
@@ -9,8 +9,9 @@ this feature does not change the 9.0.11 audio implementation or host configurati
 - During a connected iOS stream, tap the rotation button in the upper-right
   corner, or the rotation button on the keyboard bar, to switch orientation.
 - Portrait reserves the upper half of the safe area for the video and the lower
-  half for keyboard input. The system keyboard opens automatically. Video keeps
-  its aspect ratio; absolute touch and mouse coordinates use the same viewport.
+  half for keyboard input. The system keyboard opens automatically. Video fills
+  the entire upper viewport, retaining the whole desktop and stretching if the
+  aspect ratios differ. Absolute touch and mouse coordinates use the same geometry.
 - The keyboard button shows or hides the keyboard in either orientation. The
   existing three-finger gesture and Done button still work. Switching back to
   landscape hides the keyboard and restores the full-screen stream.
@@ -33,11 +34,18 @@ shrink further to avoid a docked keyboard taller than the lower half. System
 keyboards retain their native height; an iPad floating keyboard is not forced
 to dock, and a hardware keyboard may suppress the software keyboard.
 
-iOS 16+ uses Apple's
-[window scene geometry request](https://developer.apple.com/documentation/uikit/uiwindowscene/requestgeometryupdate(_:errorhandler:))
-and propagates the orientation policy through the reveal container. iOS 15 uses
-`attemptRotationToDeviceOrientation` with the requested orientation mask; this
-fallback still needs device validation. The keyboard avoidance constraint uses
+The layout selection is independent of the host window's dimensions. iOS 16+
+also tries Apple's
+[window scene geometry request](https://developer.apple.com/documentation/uikit/uiwindowscene/requestgeometryupdate(_:errorhandler:)).
+If the scene refuses programmatic rotation, the chosen layout stays active,
+and subsequent button presses work locally without repeating the rejected
+request or showing a blocking error dialog. In a portrait host window,
+full-screen mode rotates the video and its input surface by 90 degrees so it
+can be used sideways; keyboard mode restores the native upright split layout.
+The keyboard itself remains the host's system keyboard. This does not rotate
+or resize the LiveContainer/system window. iOS 15 uses
+`attemptRotationToDeviceOrientation`; the local layout still changes even if
+that call cannot rotate the scene. The keyboard avoidance constraint uses
 [UIKeyboardLayoutGuide](https://developer.apple.com/documentation/uikit/uikeyboardlayoutguide).
 The host's resolution, video encoder, and stream connection are unchanged by rotation.
 The host selection screen keeps its landscape orientation policy. The new touch
@@ -90,6 +98,36 @@ Conclusion: both targets compile, and the unsigned iOS package is ready for
 device acceptance. Runtime touch behavior, layout and rotation remain untested
 on an iPad. No release tag, host deployment or software-source update was made.
 
+### R3 — denied rotation and small portrait video regression (2026-10-14)
+
+The user reported that the system refused programmatic rotation, and the video
+occupied roughly half of the upper area. Version 9.0.13 reverted its orientation
+policy and displayed an error on rejection; layout was still recomputed solely
+from the unrotated window dimensions. The video also used aspect-fit inside the
+already-halved viewport, leaving large bars for wide desktops.
+
+Version 9.0.14 adds a persistent layout selection, ignores stale geometry-error
+callbacks, and keeps local switching available after scene rejection. A local
+90-degree transform rotates both video and input together in full-screen mode
+in a portrait host window. Renderer creation, relayout, mouse/touch mapping and
+pointer regions share one geometry calculation. Keyboard layout fills its
+viewport; full-screen mode keeps normal aspect-fit.
+
+Local command:
+
+```sh
+clang -std=c11 -Wall -Wextra -Werror -fsanitize=address,undefined -g \
+  tests/test_stream_layout.c -o /tmp/moonlight-stream-layout-test
+/tmp/moonlight-stream-layout-test
+```
+
+Passed: automatic layout, rejected rotation retaining keyboard layout,
+subsequent switches and resizes, stale errors, local rotation only in the
+restricted portrait full-screen case, wide-desktop reproduction, full-viewport
+keyboard video sizing and unchanged full-screen aspect-fit. No sanitizer errors.
+These are portable policy/geometry tests; they do not exercise live UIKit or
+LiveContainer. Apple builds and device acceptance remain pending for 9.0.14.
+
 ## Device acceptance checklist
 
 Still pending; do not treat a CI build as device acceptance.
@@ -104,7 +142,9 @@ Still pending; do not treat a CI build as device acceptance.
    the stream. Confirm there is no stuck key after returning or reconnecting.
 6. Switch orientation repeatedly with both relative and absolute touch modes;
    verify touch alignment, fit, zoom reset and full-screen landscape restoration.
-7. Test rotation lock, both landscape starting orientations, iOS 15 fallback,
+7. Test a host window that rejects scene rotation: switch locally in both directions,
+   verify 90-degree full-screen video and correctly aligned absolute touches.
+   Also test rotation lock, both landscape starting orientations, iOS 15 fallback,
    docked/floating/split keyboards and a hardware keyboard. Exit from portrait
    and confirm the host selection screen returns to landscape.
 8. Check a small iPhone, and confirm tvOS still builds and keeps its existing UI.

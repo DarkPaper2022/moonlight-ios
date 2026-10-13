@@ -12,6 +12,7 @@
 #import "StreamManager.h"
 #import "ControllerSupport.h"
 #import "DataManager.h"
+#include "StreamLayoutState.h"
 
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -58,6 +59,8 @@
     BOOL _streamConnected;
     CGSize _lastVideoSize;
     UIInterfaceOrientationMask _orientationMask;
+    StreamLayoutState _layoutState;
+    BOOL _videoRotated;
 #endif
 }
 
@@ -292,30 +295,41 @@
         [_streamButtons.topAnchor constraintEqualToAnchor:safeArea.topAnchor constant:8],
         [_streamButtons.trailingAnchor constraintEqualToAnchor:safeArea.trailingAnchor constant:-8]
     ]];
-    [self updateStreamLayoutForPortrait:self.view.bounds.size.height > self.view.bounds.size.width];
+    [self updateStreamLayoutForPortrait:StreamLayoutUsesKeyboard(&_layoutState, self.view.bounds.size.width, self.view.bounds.size.height)];
 }
 
 - (void)updateStreamLayoutForPortrait:(BOOL)portrait {
     [NSLayoutConstraint deactivateConstraints:_portraitLayout ? _portraitConstraints : _landscapeConstraints];
     _portraitLayout = portrait;
+    [_streamView setVideoAreaFilled:portrait];
     [NSLayoutConstraint activateConstraints:portrait ? _portraitConstraints : _landscapeConstraints];
-    _rotationButton.accessibilityLabel = portrait ? @"Switch to landscape" : @"Switch to portrait";
+    _rotationButton.accessibilityLabel = portrait ? @"Switch to full-screen video" : @"Switch to video and keyboard";
 }
 
 - (void)viewDidLayoutSubviews {
     [super viewDidLayoutSubviews];
-    BOOL portrait = self.view.bounds.size.height > self.view.bounds.size.width;
+    BOOL portrait = StreamLayoutUsesKeyboard(&_layoutState, self.view.bounds.size.width, self.view.bounds.size.height);
     if (portrait != _portraitLayout) {
         [self updateStreamLayoutForPortrait:portrait];
     }
-    CGSize videoSize = _videoContainer.bounds.size;
-    if (!CGSizeEqualToSize(videoSize, _lastVideoSize)) {
+    CGSize containerSize = _videoContainer.bounds.size;
+    BOOL rotateVideo = StreamLayoutRotatesVideo(&_layoutState, self.view.bounds.size.width, self.view.bounds.size.height);
+    CGSize videoSize = rotateVideo ? CGSizeMake(containerSize.height, containerSize.width) : containerSize;
+    if (!CGSizeEqualToSize(videoSize, _lastVideoSize) || rotateVideo != _videoRotated) {
         // Zoom transforms belong to the old viewport. Refit on viewport changes.
         [_scrollView setZoomScale:1.0 animated:NO];
-        _scrollView.frame = _videoContainer.bounds;
-        _streamView.frame = _videoContainer.bounds;
+        UIView* inputSurface = _scrollView != nil ? _scrollView : _streamView;
+        inputSurface.autoresizingMask = UIViewAutoresizingNone;
+        inputSurface.transform = CGAffineTransformIdentity;
+        inputSurface.bounds = CGRectMake(0, 0, videoSize.width, videoSize.height);
+        inputSurface.center = CGPointMake(CGRectGetMidX(_videoContainer.bounds), CGRectGetMidY(_videoContainer.bounds));
+        inputSurface.transform = rotateVideo ? CGAffineTransformMakeRotation(M_PI_2) : CGAffineTransformIdentity;
+        if (_scrollView != nil) {
+            _streamView.frame = _scrollView.bounds;
+        }
         _scrollView.contentSize = videoSize;
         _lastVideoSize = videoSize;
+        _videoRotated = rotateVideo;
         [_streamView setNeedsLayout];
     }
     _stageLabel.center = CGPointMake(CGRectGetMidX(_videoContainer.frame), CGRectGetMidY(_videoContainer.frame));
@@ -326,7 +340,7 @@
 - (void)viewWillTransitionToSize:(CGSize)size withTransitionCoordinator:(id<UIViewControllerTransitionCoordinator>)coordinator {
     [super viewWillTransitionToSize:size withTransitionCoordinator:coordinator];
     [_streamView releaseKeyboardKeys];
-    BOOL portrait = size.height > size.width;
+    BOOL portrait = StreamLayoutUsesKeyboard(&_layoutState, size.width, size.height);
     [self updateStreamLayoutForPortrait:portrait];
     if (!portrait) {
         [_streamView hideKeyboard];
@@ -352,8 +366,23 @@
         return;
     }
     [_streamView releaseKeyboardKeys];
+    BOOL keyboardLayout = StreamLayoutToggle(&_layoutState, self.view.bounds.size.width, self.view.bounds.size.height);
+    [self updateStreamLayoutForPortrait:keyboardLayout];
+    [self.view setNeedsLayout];
+    [self.view layoutIfNeeded];
+    if (keyboardLayout) {
+        [_streamView showKeyboard];
+    } else {
+        [_streamView hideKeyboard];
+    }
+    // The in-app layout works even in LiveContainer/native window modes which
+    // prohibit requesting a different system interface orientation.
+    if (_layoutState.sceneRotationUnavailable) {
+        return;
+    }
+    uint64_t requestNumber = _layoutState.requestNumber;
     UIInterfaceOrientationMask previousMask = _orientationMask;
-    _orientationMask = _portraitLayout ? UIInterfaceOrientationMaskLandscapeRight : UIInterfaceOrientationMaskPortrait;
+    _orientationMask = keyboardLayout ? UIInterfaceOrientationMaskPortrait : UIInterfaceOrientationMaskLandscape;
     [self invalidateOrientationPolicy];
     if (@available(iOS 16.0, *)) {
         UIWindowSceneGeometryPreferencesIOS* preferences = [[UIWindowSceneGeometryPreferencesIOS alloc] initWithInterfaceOrientations:_orientationMask];
@@ -361,13 +390,13 @@
         [self.view.window.windowScene requestGeometryUpdateWithPreferences:preferences errorHandler:^(NSError* error) {
             dispatch_async(dispatch_get_main_queue(), ^{
                 StreamFrameViewController* strongSelf = weakSelf;
-                if (strongSelf == nil || !strongSelf->_streamConnected) return;
+                if (strongSelf == nil || !strongSelf->_streamConnected || strongSelf->_layoutState.requestNumber != requestNumber) return;
+                StreamLayoutSceneRequestRejected(&strongSelf->_layoutState, requestNumber);
                 strongSelf->_orientationMask = previousMask;
                 [strongSelf invalidateOrientationPolicy];
-                Log(LOG_W, @"Stream rotation request failed: %@", error);
-                UIAlertController* alert = [UIAlertController alertControllerWithTitle:@"Unable to rotate" message:error.localizedDescription preferredStyle:UIAlertControllerStyleAlert];
-                [alert addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleDefault handler:nil]];
-                [strongSelf presentViewController:alert animated:YES completion:nil];
+                [strongSelf.view setNeedsLayout];
+                [strongSelf.view layoutIfNeeded];
+                Log(LOG_I, @"Scene rotation unavailable; keeping selected stream layout: %@", error);
             });
         }];
     } else {
@@ -452,9 +481,11 @@
     if (@available(iOS 16.0, *)) {
         [rootController setNeedsUpdateOfSupportedInterfaceOrientations];
         UIWindowSceneGeometryPreferencesIOS* preferences = [[UIWindowSceneGeometryPreferencesIOS alloc] initWithInterfaceOrientations:UIInterfaceOrientationMaskLandscape];
-        [windowScene requestGeometryUpdateWithPreferences:preferences errorHandler:^(NSError* error) {
-            Log(LOG_W, @"Restoring landscape after streaming failed: %@", error);
-        }];
+        if (!_layoutState.sceneRotationUnavailable) {
+            [windowScene requestGeometryUpdateWithPreferences:preferences errorHandler:^(NSError* error) {
+                Log(LOG_W, @"Restoring landscape after streaming failed: %@", error);
+            }];
+        }
     } else {
         [UIViewController attemptRotationToDeviceOrientation];
     }

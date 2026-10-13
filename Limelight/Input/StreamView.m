@@ -16,6 +16,7 @@
 #import "KeyboardInputField.h"
 #import <AVFoundation/AVFoundation.h>
 #import "DirectionalKeyControl.h"
+#include "StreamVideoGeometry.h"
 
 static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
 
@@ -31,6 +32,7 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
 #endif
     
     float streamAspectRatio;
+    BOOL videoAreaFilled;
     
     // iOS 13.4 mouse support
     NSInteger lastMouseButtonMask;
@@ -204,10 +206,15 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
 }
 
 - (CGSize) getVideoAreaSize {
-    if (self.bounds.size.width > self.bounds.size.height * streamAspectRatio) {
-        return CGSizeMake(self.bounds.size.height * streamAspectRatio, self.bounds.size.height);
-    } else {
-        return CGSizeMake(self.bounds.size.width, self.bounds.size.width / streamAspectRatio);
+    StreamVideoSize size = StreamVideoSizeForViewport(self.bounds.size.width, self.bounds.size.height,
+                                                     streamAspectRatio, videoAreaFilled);
+    return CGSizeMake(size.width, size.height);
+}
+
+- (void)setVideoAreaFilled:(BOOL)filled {
+    if (videoAreaFilled != filled) {
+        videoAreaFilled = filled;
+        [self setNeedsLayout];
     }
 }
 
@@ -805,14 +812,9 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
         }
     }
     
-    // This logic mimics what iOS does with AVLayerVideoGravityResizeAspect
-    CGSize videoSize;
+    // Cursor and video rendering must share the selected fit/fill geometry.
+    CGSize videoSize = [self getVideoAreaSize];
     CGPoint videoOrigin;
-    if (self.bounds.size.width > self.bounds.size.height * streamAspectRatio) {
-        videoSize = CGSizeMake(self.bounds.size.height * streamAspectRatio, self.bounds.size.height);
-    } else {
-        videoSize = CGSizeMake(self.bounds.size.width, self.bounds.size.width / streamAspectRatio);
-    }
     videoOrigin = CGPointMake(self.bounds.size.width / 2 - videoSize.width / 2,
                               self.bounds.size.height / 2 - videoSize.height / 2);
     

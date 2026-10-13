@@ -41,6 +41,9 @@ jobs:
           clang -std=c11 -Wall -Wextra -Werror tests/test_directional_key_state.c \
             -o "$RUNNER_TEMP/test_directional_key_state"
           "$RUNNER_TEMP/test_directional_key_state"
+          clang -std=c11 -Wall -Wextra -Werror tests/test_stream_layout.c \
+            -o "$RUNNER_TEMP/test_stream_layout"
+          "$RUNNER_TEMP/test_stream_layout"
 
       - name: Download ${{ matrix.platform }} platform
         run: xcodebuild -downloadPlatform ${{ matrix.platform }}

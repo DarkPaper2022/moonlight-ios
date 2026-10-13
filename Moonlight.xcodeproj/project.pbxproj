@@ -171,6 +171,8 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		A11400000000000000000001 /* StreamLayoutState.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = StreamLayoutState.h; sourceTree = "<group>"; };
+		A11400000000000000000002 /* StreamVideoGeometry.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = StreamVideoGeometry.h; sourceTree = "<group>"; };
 		A11300000000000000000001 /* DirectionalKeyControl.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = DirectionalKeyControl.h; sourceTree = "<group>"; };
 		A11300000000000000000002 /* DirectionalKeyControl.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = DirectionalKeyControl.m; sourceTree = "<group>"; };
 		A11300000000000000000003 /* DirectionalKeyState.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = DirectionalKeyState.h; sourceTree = "<group>"; };
@@ -512,6 +514,8 @@
 				A11300000000000000000001 /* DirectionalKeyControl.h */,
 				A11300000000000000000002 /* DirectionalKeyControl.m */,
 				A11300000000000000000003 /* DirectionalKeyState.h */,
+				A11400000000000000000001 /* StreamLayoutState.h */,
+				A11400000000000000000002 /* StreamVideoGeometry.h */,
 				FB4678EB1A50C40900377732 /* OnScreenControls.h */,
 				FB4678EC1A50C40900377732 /* OnScreenControls.m */,
 				FB1A674B2131E65900507771 /* KeyboardSupport.h */,
@@ -1021,7 +1025,7 @@
 					"$(PROJECT_DIR)/libs/SDL2/lib/tvOS-Sim",
 					"$(PROJECT_DIR)/libs/FFmpeg/lib/tvOS-Sim",
 				);
-				MARKETING_VERSION = 9.0.13;
+				MARKETING_VERSION = 9.0.14;
 				MTL_ENABLE_DEBUG_INFO = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.moonlight-stream.Moonlight";
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -1077,7 +1081,7 @@
 					"$(PROJECT_DIR)/libs/SDL2/lib/tvOS-Sim",
 					"$(PROJECT_DIR)/libs/FFmpeg/lib/tvOS-Sim",
 				);
-				MARKETING_VERSION = 9.0.13;
+				MARKETING_VERSION = 9.0.14;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.moonlight-stream.Moonlight";
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -1243,7 +1247,7 @@
 					"$(PROJECT_DIR)/libs/SDL2/lib/iOS-Sim",
 					"$(PROJECT_DIR)/libs/FFmpeg/lib/iOS-Sim",
 				);
-				MARKETING_VERSION = 9.0.13;
+				MARKETING_VERSION = 9.0.14;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.moonlight-stream.Moonlight";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE = "";
@@ -1293,7 +1297,7 @@
 					"$(PROJECT_DIR)/libs/SDL2/lib/iOS-Sim",
 					"$(PROJECT_DIR)/libs/FFmpeg/lib/iOS-Sim",
 				);
-				MARKETING_VERSION = 9.0.13;
+				MARKETING_VERSION = 9.0.14;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.moonlight-stream.Moonlight";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE = "";
