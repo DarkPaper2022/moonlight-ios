@@ -160,8 +160,21 @@ static float L3_Y;
 
 - (void) show {
     _visible = YES;
-        
-    [self updateControls];
+    [self updateLayout];
+}
+
+- (void) updateLayout {
+    _controlArea = _view.bounds;
+    if (_iPad) {
+        _controlArea.size.height /= 2.0;
+        _controlArea.origin.y = CGRectGetMaxY(_view.bounds) - _controlArea.size.height;
+    } else {
+        _controlArea.origin.x = _controlArea.size.width * EDGE_WIDTH;
+        _controlArea.size.width -= _controlArea.origin.x * 2;
+    }
+    if (_visible) {
+        [self updateControls];
+    }
 }
 
 - (void) setLevel:(OnScreenControlsLevel)level {

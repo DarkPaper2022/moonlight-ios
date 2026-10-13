@@ -46,10 +46,18 @@
     StreamView *_streamView;
     UIScrollView *_scrollView;
     BOOL _userIsInteracting;
-    CGSize _keyboardSize;
     
 #if !TARGET_OS_TV
     UIScreenEdgePanGestureRecognizer *_exitSwipeRecognizer;
+    UIView* _videoContainer;
+    NSArray<NSLayoutConstraint*>* _landscapeConstraints;
+    NSArray<NSLayoutConstraint*>* _portraitConstraints;
+    UIStackView* _streamButtons;
+    UIButton* _rotationButton;
+    BOOL _portraitLayout;
+    BOOL _streamConnected;
+    CGSize _lastVideoSize;
+    UIInterfaceOrientationMask _orientationMask;
 #endif
 }
 
@@ -59,6 +67,7 @@
     
 #if !TARGET_OS_TV
     [[self revealViewController] setPrimaryViewController:self];
+    [self invalidateOrientationPolicy];
 #endif
 }
 
@@ -84,6 +93,10 @@
     [UIApplication sharedApplication].idleTimerDisabled = YES;
     
     _settings = [[[DataManager alloc] init] getSettings];
+#if !TARGET_OS_TV
+    _orientationMask = UIInterfaceOrientationMaskLandscape;
+    self.view.backgroundColor = [UIColor colorWithWhite:0.08 alpha:1.0];
+#endif
     
     _stageLabel = [[UILabel alloc] init];
     [_stageLabel setUserInteractionEnabled:NO];
@@ -107,7 +120,8 @@
     _controllerSupport = [[ControllerSupport alloc] initWithConfig:self.streamConfig delegate:self];
     _inactivityTimer = nil;
     
-    _streamView = [[StreamView alloc] initWithFrame:self.view.frame];
+    _streamView = [[StreamView alloc] initWithFrame:self.view.bounds];
+    _streamView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     [_streamView setupStreamView:_controllerSupport interactionDelegate:self config:self.streamConfig];
     
 #if TARGET_OS_TV
@@ -172,23 +186,21 @@
                                                  name: UIApplicationDidEnterBackgroundNotification
                                                object: nil];
 
-#if 0
-    // FIXME: This doesn't work reliably on iPad for some reason. Showing and hiding the keyboard
-    // several times in a row will not correctly restore the state of the UIScrollView.
-    [[NSNotificationCenter defaultCenter] addObserver: self
-                                             selector: @selector(keyboardWillShow:)
-                                                 name: UIKeyboardWillShowNotification
-                                               object: nil];
-    
-    [[NSNotificationCenter defaultCenter] addObserver: self
-                                             selector: @selector(keyboardWillHide:)
-                                                 name: UIKeyboardWillHideNotification
-                                               object: nil];
+#if !TARGET_OS_TV
+    _videoContainer = [[UIView alloc] init];
+    _videoContainer.translatesAutoresizingMaskIntoConstraints = NO;
+    _videoContainer.backgroundColor = [UIColor blackColor];
+    _videoContainer.clipsToBounds = YES;
+    [self.view addSubview:_videoContainer];
+    UIView* videoParent = _videoContainer;
+#else
+    UIView* videoParent = self.view;
 #endif
     
     // Only enable scroll and zoom in absolute touch mode
     if (_settings.absoluteTouchMode) {
-        _scrollView = [[UIScrollView alloc] initWithFrame:self.view.frame];
+        _scrollView = [[UIScrollView alloc] initWithFrame:self.view.bounds];
+        _scrollView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
 #if !TARGET_OS_TV
         [_scrollView.panGestureRecognizer setMinimumNumberOfTouches:2];
 #endif
@@ -199,16 +211,19 @@
         
         // Add StreamView inside a UIScrollView for absolute mode
         [_scrollView addSubview:_streamView];
-        [self.view addSubview:_scrollView];
+        [videoParent addSubview:_scrollView];
     }
     else {
         // Add StreamView directly in relative mode
-        [self.view addSubview:_streamView];
+        [videoParent addSubview:_streamView];
     }
     
     [self.view addSubview:_stageLabel];
     [self.view addSubview:_spinner];
     [self.view addSubview:_tipLabel];
+#if !TARGET_OS_TV
+    [self setupStreamLayout];
+#endif
 }
 
 - (UIView *)viewForZoomingInScrollView:(UIScrollView *)scrollView {
@@ -218,6 +233,10 @@
 - (void)willMoveToParentViewController:(UIViewController *)parent {
     // Only cleanup when we're being destroyed
     if (parent == nil) {
+#if !TARGET_OS_TV
+        _streamConnected = NO;
+        [_streamView hideKeyboard];
+#endif
         [_controllerSupport cleanup];
         [UIApplication sharedApplication].idleTimerDisabled = NO;
         [_streamMan stopStream];
@@ -229,27 +248,135 @@
     }
 }
 
-#if 0
-- (void)keyboardWillShow:(NSNotification *)notification {
-    _keyboardSize = [[[notification userInfo] objectForKey:UIKeyboardFrameBeginUserInfoKey] CGRectValue].size;
+#if !TARGET_OS_TV
+- (void)setupStreamLayout {
+    UILayoutGuide* safeArea = self.view.safeAreaLayoutGuide;
+    _landscapeConstraints = @[
+        [_videoContainer.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
+        [_videoContainer.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
+        [_videoContainer.topAnchor constraintEqualToAnchor:self.view.topAnchor],
+        [_videoContainer.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor]
+    ];
+    NSLayoutConstraint* halfHeight = [_videoContainer.heightAnchor constraintEqualToAnchor:safeArea.heightAnchor multiplier:0.5];
+    // On smaller phones, leave room for keyboards taller than half the screen.
+    halfHeight.priority = UILayoutPriorityDefaultHigh;
+    _portraitConstraints = @[
+        [_videoContainer.leadingAnchor constraintEqualToAnchor:safeArea.leadingAnchor],
+        [_videoContainer.trailingAnchor constraintEqualToAnchor:safeArea.trailingAnchor],
+        [_videoContainer.topAnchor constraintEqualToAnchor:safeArea.topAnchor],
+        halfHeight,
+        [_videoContainer.bottomAnchor constraintLessThanOrEqualToAnchor:self.view.keyboardLayoutGuide.topAnchor]
+    ];
 
-    [UIView animateWithDuration:0.3 animations:^{
-        CGRect frame = self->_scrollView.frame;
-        frame.size.height -= self->_keyboardSize.height;
-        self->_scrollView.frame = frame;
+    _rotationButton = [UIButton buttonWithType:UIButtonTypeSystem];
+    [_rotationButton setImage:[UIImage systemImageNamed:@"rotate.right"] forState:UIControlStateNormal];
+    _rotationButton.accessibilityLabel = @"Switch to portrait";
+    [_rotationButton addTarget:self action:@selector(toggleStreamOrientation) forControlEvents:UIControlEventTouchUpInside];
+    UIButton* keyboard = [UIButton buttonWithType:UIButtonTypeSystem];
+    [keyboard setImage:[UIImage systemImageNamed:@"keyboard"] forState:UIControlStateNormal];
+    keyboard.accessibilityLabel = @"Show or hide keyboard";
+    [keyboard addTarget:_streamView action:@selector(toggleKeyboard) forControlEvents:UIControlEventTouchUpInside];
+    for (UIButton* button in @[_rotationButton, keyboard]) {
+        button.tintColor = [UIColor whiteColor];
+        button.backgroundColor = [UIColor colorWithWhite:0.15 alpha:0.8];
+        button.layer.cornerRadius = 8;
+        [button.widthAnchor constraintEqualToConstant:44].active = YES;
+        [button.heightAnchor constraintEqualToConstant:44].active = YES;
+    }
+    _streamButtons = [[UIStackView alloc] initWithArrangedSubviews:@[keyboard, _rotationButton]];
+    _streamButtons.spacing = 8;
+    _streamButtons.translatesAutoresizingMaskIntoConstraints = NO;
+    _streamButtons.userInteractionEnabled = NO;
+    [self.view addSubview:_streamButtons];
+    [NSLayoutConstraint activateConstraints:@[
+        [_streamButtons.topAnchor constraintEqualToAnchor:safeArea.topAnchor constant:8],
+        [_streamButtons.trailingAnchor constraintEqualToAnchor:safeArea.trailingAnchor constant:-8]
+    ]];
+    [self updateStreamLayoutForPortrait:self.view.bounds.size.height > self.view.bounds.size.width];
+}
+
+- (void)updateStreamLayoutForPortrait:(BOOL)portrait {
+    [NSLayoutConstraint deactivateConstraints:_portraitLayout ? _portraitConstraints : _landscapeConstraints];
+    _portraitLayout = portrait;
+    [NSLayoutConstraint activateConstraints:portrait ? _portraitConstraints : _landscapeConstraints];
+    _rotationButton.accessibilityLabel = portrait ? @"Switch to landscape" : @"Switch to portrait";
+}
+
+- (void)viewDidLayoutSubviews {
+    [super viewDidLayoutSubviews];
+    BOOL portrait = self.view.bounds.size.height > self.view.bounds.size.width;
+    if (portrait != _portraitLayout) {
+        [self updateStreamLayoutForPortrait:portrait];
+    }
+    CGSize videoSize = _videoContainer.bounds.size;
+    if (!CGSizeEqualToSize(videoSize, _lastVideoSize)) {
+        // Zoom transforms belong to the old viewport. Refit on viewport changes.
+        [_scrollView setZoomScale:1.0 animated:NO];
+        _scrollView.frame = _videoContainer.bounds;
+        _streamView.frame = _videoContainer.bounds;
+        _scrollView.contentSize = videoSize;
+        _lastVideoSize = videoSize;
+        [_streamView setNeedsLayout];
+    }
+    _stageLabel.center = CGPointMake(CGRectGetMidX(_videoContainer.frame), CGRectGetMidY(_videoContainer.frame));
+    _spinner.center = CGPointMake(_stageLabel.center.x, _stageLabel.center.y - _stageLabel.bounds.size.height - _spinner.bounds.size.height);
+    _tipLabel.center = CGPointMake(_stageLabel.center.x, CGRectGetMaxY(_videoContainer.frame) - 40);
+}
+
+- (void)viewWillTransitionToSize:(CGSize)size withTransitionCoordinator:(id<UIViewControllerTransitionCoordinator>)coordinator {
+    [super viewWillTransitionToSize:size withTransitionCoordinator:coordinator];
+    [_streamView releaseKeyboardKeys];
+    BOOL portrait = size.height > size.width;
+    [self updateStreamLayoutForPortrait:portrait];
+    if (!portrait) {
+        [_streamView hideKeyboard];
+    }
+    [coordinator animateAlongsideTransition:nil completion:^(id<UIViewControllerTransitionCoordinatorContext> context) {
+        if (self->_streamConnected && self->_portraitLayout && self.view.window != nil) {
+            [self->_streamView showKeyboard];
+        }
     }];
 }
 
--(void)keyboardWillHide:(NSNotification *)notification {
-    // NOTE: UIKeyboardFrameEndUserInfoKey returns a different keyboard size
-    // than UIKeyboardFrameBeginUserInfoKey, so it's unsuitable for use here
-    // to undo the changes made by keyboardWillShow.
-    
-    [UIView animateWithDuration:0.3 animations:^{
-        CGRect frame = self->_scrollView.frame;
-        frame.size.height += self->_keyboardSize.height;
-        self->_scrollView.frame = frame;
-    }];
+- (void)invalidateOrientationPolicy {
+    if (@available(iOS 16.0, *)) {
+        // The reveal controller is the root container making rotation decisions.
+        for (UIViewController* controller = self; controller != nil; controller = controller.parentViewController) {
+            [controller setNeedsUpdateOfSupportedInterfaceOrientations];
+        }
+    }
+}
+
+- (void)toggleStreamOrientation {
+    if (!_streamConnected) {
+        return;
+    }
+    [_streamView releaseKeyboardKeys];
+    UIInterfaceOrientationMask previousMask = _orientationMask;
+    _orientationMask = _portraitLayout ? UIInterfaceOrientationMaskLandscapeRight : UIInterfaceOrientationMaskPortrait;
+    [self invalidateOrientationPolicy];
+    if (@available(iOS 16.0, *)) {
+        UIWindowSceneGeometryPreferencesIOS* preferences = [[UIWindowSceneGeometryPreferencesIOS alloc] initWithInterfaceOrientations:_orientationMask];
+        __weak StreamFrameViewController* weakSelf = self;
+        [self.view.window.windowScene requestGeometryUpdateWithPreferences:preferences errorHandler:^(NSError* error) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                StreamFrameViewController* strongSelf = weakSelf;
+                if (strongSelf == nil || !strongSelf->_streamConnected) return;
+                strongSelf->_orientationMask = previousMask;
+                [strongSelf invalidateOrientationPolicy];
+                Log(LOG_W, @"Stream rotation request failed: %@", error);
+                UIAlertController* alert = [UIAlertController alertControllerWithTitle:@"Unable to rotate" message:error.localizedDescription preferredStyle:UIAlertControllerStyleAlert];
+                [alert addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleDefault handler:nil]];
+                [strongSelf presentViewController:alert animated:YES completion:nil];
+            });
+        }];
+    } else {
+        [UIViewController attemptRotationToDeviceOrientation];
+    }
+}
+
+- (UIInterfaceOrientationMask)supportedInterfaceOrientations {
+    return _orientationMask ?: UIInterfaceOrientationMaskLandscape;
 }
 #endif
 
@@ -306,6 +433,13 @@
 }
 
 - (void) returnToMainFrame {
+#if !TARGET_OS_TV
+    UIWindowScene* windowScene = self.view.window.windowScene;
+    UIViewController* rootController = self.view.window.rootViewController;
+    _streamConnected = NO;
+    [_streamView hideKeyboard];
+    _orientationMask = UIInterfaceOrientationMaskLandscape;
+#endif
     // Reset display mode back to default
     [self updatePreferredDisplayMode:NO];
     
@@ -313,10 +447,25 @@
     _statsUpdateTimer = nil;
     
     [self.navigationController popToRootViewControllerAnimated:YES];
+#if !TARGET_OS_TV
+    [self invalidateOrientationPolicy];
+    if (@available(iOS 16.0, *)) {
+        [rootController setNeedsUpdateOfSupportedInterfaceOrientations];
+        UIWindowSceneGeometryPreferencesIOS* preferences = [[UIWindowSceneGeometryPreferencesIOS alloc] initWithInterfaceOrientations:UIInterfaceOrientationMaskLandscape];
+        [windowScene requestGeometryUpdateWithPreferences:preferences errorHandler:^(NSError* error) {
+            Log(LOG_W, @"Restoring landscape after streaming failed: %@", error);
+        }];
+    } else {
+        [UIViewController attemptRotationToDeviceOrientation];
+    }
+#endif
 }
 
 // This will fire if the user opens control center or gets a low battery message
 - (void)applicationWillResignActive:(NSNotification *)notification {
+#if !TARGET_OS_TV
+    [_streamView releaseKeyboardKeys];
+#endif
     if (_inactivityTimer != nil) {
         [_inactivityTimer invalidate];
     }
@@ -370,6 +519,13 @@
 - (void) connectionStarted {
     Log(LOG_I, @"Connection started");
     dispatch_async(dispatch_get_main_queue(), ^{
+#if !TARGET_OS_TV
+        self->_streamConnected = YES;
+        self->_streamButtons.userInteractionEnabled = YES;
+        if (self->_portraitLayout) {
+            [self->_streamView showKeyboard];
+        }
+#endif
         // Leave the spinner spinning until it's obscured by
         // the first frame of video.
         self->_stageLabel.hidden = YES;
@@ -396,6 +552,11 @@
     unsigned int portTestResults = LiTestClientConnectivity(CONN_TEST_SERVER, 443, portFlags);
     
     dispatch_async(dispatch_get_main_queue(), ^{
+#if !TARGET_OS_TV
+        self->_streamConnected = NO;
+        self->_streamButtons.userInteractionEnabled = NO;
+        [self->_streamView hideKeyboard];
+#endif
         // Allow the display to go to sleep now
         [UIApplication sharedApplication].idleTimerDisabled = NO;
         

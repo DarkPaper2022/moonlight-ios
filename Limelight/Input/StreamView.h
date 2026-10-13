@@ -16,6 +16,10 @@
 - (void) userInteractionBegan;
 - (void) userInteractionEnded;
 
+#if !TARGET_OS_TV
+- (void) toggleStreamOrientation;
+#endif
+
 @end
 
 #if TARGET_OS_TV
@@ -32,6 +36,10 @@
 
 #if !TARGET_OS_TV
 - (void) updateCursorLocation:(CGPoint)location isMouse:(BOOL)isMouse;
+- (void) showKeyboard;
+- (void) hideKeyboard;
+- (void) toggleKeyboard;
+- (void) releaseKeyboardKeys;
 #endif
 
 @end

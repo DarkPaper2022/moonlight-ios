@@ -1384,6 +1384,9 @@ const int FrontViewPositionNone = 0xff;
 - (void)setPrimaryViewController:(UIViewController*)viewController
 {
     _primaryViewController = viewController;
+    if (@available(iOS 16.0, *)) {
+        [self setNeedsUpdateOfSupportedInterfaceOrientations];
+    }
 
     // These are derived from the primary view controller
     if (@available(iOS 11.0, *)) {
@@ -1393,6 +1396,11 @@ const int FrontViewPositionNone = 0xff;
     if (@available(iOS 14.0, *)) {
         [self setNeedsUpdateOfPrefersPointerLocked];
     }
+}
+
+- (UIInterfaceOrientationMask)supportedInterfaceOrientations
+{
+    return _primaryViewController != nil ? _primaryViewController.supportedInterfaceOrientations : UIInterfaceOrientationMaskLandscape;
 }
 
 - (UIViewController*)childViewControllerForHomeIndicatorAutoHidden

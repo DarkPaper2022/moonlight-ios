@@ -35,6 +35,13 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Check directional key transitions
+        if: matrix.platform == 'iOS'
+        run: |
+          clang -std=c11 -Wall -Wextra -Werror tests/test_directional_key_state.c \
+            -o "$RUNNER_TEMP/test_directional_key_state"
+          "$RUNNER_TEMP/test_directional_key_state"
+
       - name: Download ${{ matrix.platform }} platform
         run: xcodebuild -downloadPlatform ${{ matrix.platform }}
 

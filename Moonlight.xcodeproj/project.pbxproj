@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		A11300000000000000000004 /* DirectionalKeyControl.m in Sources */ = {isa = PBXBuildFile; fileRef = A11300000000000000000002 /* DirectionalKeyControl.m */; };
 		693B3A9B218638CD00982F7B /* Settings.bundle in Resources */ = {isa = PBXBuildFile; fileRef = 693B3A9A218638CD00982F7B /* Settings.bundle */; };
 		98181BE92791277400E43572 /* libSDL2.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 98181BE82791275D00E43572 /* libSDL2.a */; };
 		98181BEB2791278F00E43572 /* libSDL2.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 98181BEA2791278300E43572 /* libSDL2.a */; };
@@ -170,6 +171,9 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		A11300000000000000000001 /* DirectionalKeyControl.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = DirectionalKeyControl.h; sourceTree = "<group>"; };
+		A11300000000000000000002 /* DirectionalKeyControl.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = DirectionalKeyControl.m; sourceTree = "<group>"; };
+		A11300000000000000000003 /* DirectionalKeyState.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = DirectionalKeyState.h; sourceTree = "<group>"; };
 		566E9D2B2770B23A00EF7BFE /* Moonlight v1.7.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = "Moonlight v1.7.xcdatamodel"; sourceTree = "<group>"; };
 		693B3A9A218638CD00982F7B /* Settings.bundle */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.plug-in"; path = Settings.bundle; sourceTree = "<group>"; };
 		9803CCAB254F9EAF00EE185E /* ConnectionCallbacks.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ConnectionCallbacks.h; sourceTree = "<group>"; };
@@ -505,6 +509,9 @@
 				FB89460B19F646E200339C8A /* ControllerSupport.m */,
 				FB89460C19F646E200339C8A /* StreamView.h */,
 				FB89460D19F646E200339C8A /* StreamView.m */,
+				A11300000000000000000001 /* DirectionalKeyControl.h */,
+				A11300000000000000000002 /* DirectionalKeyControl.m */,
+				A11300000000000000000003 /* DirectionalKeyState.h */,
 				FB4678EB1A50C40900377732 /* OnScreenControls.h */,
 				FB4678EC1A50C40900377732 /* OnScreenControls.m */,
 				FB1A674B2131E65900507771 /* KeyboardSupport.h */,
@@ -909,6 +916,7 @@
 				FB89462C19F646E200339C8A /* HttpManager.m in Sources */,
 				FB89462D19F646E200339C8A /* MDNSManager.m in Sources */,
 				FB89462B19F646E200339C8A /* StreamView.m in Sources */,
+				A11300000000000000000004 /* DirectionalKeyControl.m in Sources */,
 				FB4678FA1A55FFAD00377732 /* DiscoveryManager.m in Sources */,
 				98D5856D1C0EA79600F6CC00 /* TemporaryHost.m in Sources */,
 				FB89463519F646E200339C8A /* MainFrameViewController.m in Sources */,
@@ -1013,7 +1021,7 @@
 					"$(PROJECT_DIR)/libs/SDL2/lib/tvOS-Sim",
 					"$(PROJECT_DIR)/libs/FFmpeg/lib/tvOS-Sim",
 				);
-				MARKETING_VERSION = 9.0.11;
+				MARKETING_VERSION = 9.0.13;
 				MTL_ENABLE_DEBUG_INFO = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.moonlight-stream.Moonlight";
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -1069,7 +1077,7 @@
 					"$(PROJECT_DIR)/libs/SDL2/lib/tvOS-Sim",
 					"$(PROJECT_DIR)/libs/FFmpeg/lib/tvOS-Sim",
 				);
-				MARKETING_VERSION = 9.0.11;
+				MARKETING_VERSION = 9.0.13;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.moonlight-stream.Moonlight";
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -1235,7 +1243,7 @@
 					"$(PROJECT_DIR)/libs/SDL2/lib/iOS-Sim",
 					"$(PROJECT_DIR)/libs/FFmpeg/lib/iOS-Sim",
 				);
-				MARKETING_VERSION = 9.0.11;
+				MARKETING_VERSION = 9.0.13;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.moonlight-stream.Moonlight";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE = "";
@@ -1285,7 +1293,7 @@
 					"$(PROJECT_DIR)/libs/SDL2/lib/iOS-Sim",
 					"$(PROJECT_DIR)/libs/FFmpeg/lib/iOS-Sim",
 				);
-				MARKETING_VERSION = 9.0.11;
+				MARKETING_VERSION = 9.0.13;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.moonlight-stream.Moonlight";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE = "";

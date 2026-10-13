@@ -14,6 +14,8 @@
 #import "RelativeTouchHandler.h"
 #import "AbsoluteTouchHandler.h"
 #import "KeyboardInputField.h"
+#import <AVFoundation/AVFoundation.h>
+#import "DirectionalKeyControl.h"
 
 static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
 
@@ -23,6 +25,10 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
     KeyboardInputField* keyInputField;
     BOOL isInputingText;
     NSMutableSet* keysDown;
+#if !TARGET_OS_TV
+    DirectionalKeyControl* directionControl;
+    NSMutableArray<UIButton*>* modifierButtons;
+#endif
     
     float streamAspectRatio;
     
@@ -60,6 +66,8 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
     [keyInputField setAutocorrectionType:UITextAutocorrectionTypeNo];
     [keyInputField setAutocapitalizationType:UITextAutocapitalizationTypeNone];
     [keyInputField setSpellCheckingType:UITextSpellCheckingTypeNo];
+    keyInputField.delegate = self;
+    [keyInputField addTarget:self action:@selector(onKeyboardPressed:) forControlEvents:UIControlEventEditingChanged];
     [self addSubview:keyInputField];
     
 #if TARGET_OS_TV
@@ -127,6 +135,25 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
     // This is critical to ensure keyboard events are delivered to this
     // StreamView and not our parent UIView, especially on tvOS.
     [self becomeFirstResponder];
+}
+
+- (void)layoutSubviews {
+    [super layoutSubviews];
+    // Resize the existing decoder layer rather than restarting the stream.
+    // Use the same aspect-ratio calculation as absolute mouse/touch coordinates.
+    CGSize videoSize = [self getVideoAreaSize];
+    [CATransaction begin];
+    [CATransaction setDisableActions:YES];
+    for (CALayer* layer in self.layer.sublayers) {
+        if ([layer isKindOfClass:[AVSampleBufferDisplayLayer class]]) {
+            layer.position = CGPointMake(CGRectGetMidX(self.bounds), CGRectGetMidY(self.bounds));
+            layer.bounds = CGRectMake(0, 0, videoSize.width, videoSize.height);
+        }
+    }
+    [CATransaction commit];
+#if !TARGET_OS_TV
+    [onScreenControls updateLayout];
+#endif
 }
 
 - (void)startInteractionTimer {
@@ -352,53 +379,163 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
         [touchHandler touchesBegan:touches withEvent:event];
         
         if ([[event allTouches] count] == 3) {
-            if (isInputingText) {
-                Log(LOG_D, @"Closing the keyboard");
-                [keyInputField resignFirstResponder];
-                isInputingText = false;
-            } else {
-                Log(LOG_D, @"Opening the keyboard");
-                // Prepare the textbox used to capture keyboard events.
-                keyInputField.delegate = self;
-                keyInputField.text = @"0";
 #if !TARGET_OS_TV
-                // Prepare the toolbar above the keyboard for more options
-                UIToolbar *customToolbarView = [[UIToolbar alloc] initWithFrame:CGRectMake(0, 0, self.bounds.size.width, 44)];
-                
-                UIBarButtonItem *doneBarButton = [self createButtonWithImageNamed:@"DoneIcon.png" backgroundColor:[UIColor clearColor] target:self action:@selector(toolbarButtonClicked:) keyCode:0x00 isToggleable:NO];
-                UIBarButtonItem *windowsBarButton = [self createButtonWithImageNamed:@"WindowsIcon.png" backgroundColor:[UIColor blackColor] target:self action:@selector(toolbarButtonClicked:) keyCode:0x5B isToggleable:YES];
-                UIBarButtonItem *tabBarButton = [self createButtonWithImageNamed:@"TabIcon.png" backgroundColor:[UIColor blackColor] target:self action:@selector(toolbarButtonClicked:) keyCode:0x09 isToggleable:NO];
-                UIBarButtonItem *shiftBarButton = [self createButtonWithImageNamed:@"ShiftIcon.png" backgroundColor:[UIColor blackColor] target:self action:@selector(toolbarButtonClicked:) keyCode:0xA0 isToggleable:YES];
-                UIBarButtonItem *escapeBarButton = [self createButtonWithImageNamed:@"EscapeIcon.png" backgroundColor:[UIColor blackColor] target:self action:@selector(toolbarButtonClicked:) keyCode:0x1B isToggleable:NO];
-                UIBarButtonItem *controlBarButton = [self createButtonWithImageNamed:@"ControlIcon.png" backgroundColor:[UIColor blackColor] target:self action:@selector(toolbarButtonClicked:) keyCode:0xA2 isToggleable:YES];
-                UIBarButtonItem *altBarButton = [self createButtonWithImageNamed:@"AltIcon.png" backgroundColor:[UIColor blackColor] target:self action:@selector(toolbarButtonClicked:) keyCode:0xA4 isToggleable:YES];
-                UIBarButtonItem *deleteBarButton = [self createButtonWithImageNamed:@"DeleteIcon.png" backgroundColor:[UIColor blackColor] target:self action:@selector(toolbarButtonClicked:) keyCode:0x2E isToggleable:NO];
-                UIBarButtonItem *flexibleSpace = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace target:nil action:nil];
-                
-                [customToolbarView setItems:[NSArray arrayWithObjects:doneBarButton, windowsBarButton, escapeBarButton, tabBarButton, shiftBarButton, controlBarButton, altBarButton, deleteBarButton, flexibleSpace, nil]];
-                keyInputField.inputAccessoryView = customToolbarView;
-#endif
+            [self toggleKeyboard];
+#else
+            if (isInputingText) {
+                [keyInputField resignFirstResponder];
+            } else {
+                keyInputField.text = @"0";
                 [keyInputField becomeFirstResponder];
-                [keyInputField addTarget:self action:@selector(onKeyboardPressed:) forControlEvents:UIControlEventEditingChanged];
-                
-                // Undo causes issues for our state management, so turn it off
                 [keyInputField.undoManager disableUndoRegistration];
-                
-                isInputingText = true;
             }
+            isInputingText = keyInputField.isFirstResponder;
+#endif
         }
     }
 }
+
+#if !TARGET_OS_TV
+- (UIView*)createKeyboardAccessory {
+    UIView* accessory = [[UIView alloc] initWithFrame:CGRectMake(0, 0, self.window.bounds.size.width, 52)];
+    accessory.autoresizingMask = UIViewAutoresizingFlexibleWidth;
+    accessory.backgroundColor = [UIColor colorWithWhite:0.1 alpha:1.0];
+
+    UIButton* done = (UIButton*)[self createButtonWithImageNamed:@"DoneIcon.png" backgroundColor:[UIColor clearColor] target:self action:@selector(toolbarButtonClicked:) keyCode:0 isToggleable:NO].customView;
+    done.accessibilityLabel = @"Hide keyboard";
+
+    // Keep directions and rotation visible; only the special keys scroll.
+    UIScrollView* specialKeys = [[UIScrollView alloc] init];
+    specialKeys.showsHorizontalScrollIndicator = NO;
+    specialKeys.alwaysBounceHorizontal = YES;
+    specialKeys.directionalLockEnabled = YES;
+    UIStackView* keyRow = [[UIStackView alloc] init];
+    keyRow.axis = UILayoutConstraintAxisHorizontal;
+    keyRow.translatesAutoresizingMaskIntoConstraints = NO;
+    modifierButtons = [[NSMutableArray alloc] init];
+
+    NSArray<NSString*>* images = @[@"WindowsIcon.png", @"EscapeIcon.png", @"TabIcon.png", @"ShiftIcon.png", @"ControlIcon.png", @"AltIcon.png", @"DeleteIcon.png"];
+    NSArray<NSString*>* labels = @[@"Windows", @"Escape", @"Tab", @"Shift", @"Control", @"Alt", @"Delete"];
+    const short codes[] = {0x5B, 0x1B, 0x09, 0xA0, 0xA2, 0xA4, 0x2E};
+    for (NSUInteger i = 0; i < images.count; i++) {
+        BOOL toggleable = (codes[i] == 0x5B || codes[i] == 0xA0 || codes[i] == 0xA2 || codes[i] == 0xA4);
+        UIButton* button = (UIButton*)[self createButtonWithImageNamed:images[i] backgroundColor:[UIColor blackColor] target:self action:@selector(toolbarButtonClicked:) keyCode:codes[i] isToggleable:toggleable].customView;
+        button.accessibilityLabel = labels[i];
+        [button.widthAnchor constraintEqualToConstant:44].active = YES;
+        [keyRow addArrangedSubview:button];
+        if (toggleable) {
+            [modifierButtons addObject:button];
+        }
+    }
+    [specialKeys addSubview:keyRow];
+    [NSLayoutConstraint activateConstraints:@[
+        [keyRow.leadingAnchor constraintEqualToAnchor:specialKeys.contentLayoutGuide.leadingAnchor],
+        [keyRow.trailingAnchor constraintEqualToAnchor:specialKeys.contentLayoutGuide.trailingAnchor],
+        [keyRow.topAnchor constraintEqualToAnchor:specialKeys.contentLayoutGuide.topAnchor],
+        [keyRow.bottomAnchor constraintEqualToAnchor:specialKeys.contentLayoutGuide.bottomAnchor],
+        [keyRow.heightAnchor constraintEqualToAnchor:specialKeys.frameLayoutGuide.heightAnchor]
+    ]];
+
+    directionControl = [[DirectionalKeyControl alloc] initWithFrame:CGRectZero];
+    __weak StreamView* weakSelf = self;
+    directionControl.keyEventHandler = ^(unsigned short keyCode, BOOL down) {
+        StreamView* strongSelf = weakSelf;
+        if (strongSelf) {
+            LiSendKeyboardEvent(0x8000 | keyCode, down ? KEY_ACTION_DOWN : KEY_ACTION_UP,
+                                [strongSelf keyboardModifierFlags]);
+            if (down) {
+                [strongSelf startInteractionTimer];
+            }
+        }
+    };
+
+    UIButton* rotate = [UIButton buttonWithType:UIButtonTypeSystem];
+    [rotate setImage:[UIImage systemImageNamed:@"rotate.right"] forState:UIControlStateNormal];
+    rotate.tintColor = [UIColor whiteColor];
+    rotate.accessibilityLabel = @"Switch portrait or landscape";
+    [rotate addTarget:self action:@selector(rotateStream:) forControlEvents:UIControlEventTouchUpInside];
+
+    UIStackView* bar = [[UIStackView alloc] initWithArrangedSubviews:@[done, specialKeys, directionControl, rotate]];
+    bar.axis = UILayoutConstraintAxisHorizontal;
+    bar.spacing = 4;
+    bar.translatesAutoresizingMaskIntoConstraints = NO;
+    [accessory addSubview:bar];
+    [NSLayoutConstraint activateConstraints:@[
+        [bar.leadingAnchor constraintEqualToAnchor:accessory.leadingAnchor constant:4],
+        [bar.trailingAnchor constraintEqualToAnchor:accessory.trailingAnchor constant:-4],
+        [bar.topAnchor constraintEqualToAnchor:accessory.topAnchor constant:4],
+        [bar.bottomAnchor constraintEqualToAnchor:accessory.bottomAnchor constant:-4],
+        [done.widthAnchor constraintEqualToConstant:44],
+        [rotate.widthAnchor constraintEqualToConstant:44],
+        [directionControl.widthAnchor constraintEqualToConstant:68]
+    ]];
+    return accessory;
+}
+
+- (unsigned char)keyboardModifierFlags {
+    unsigned char flags = 0;
+    if ([keysDown containsObject:@(0xA0)]) flags |= MODIFIER_SHIFT;
+    if ([keysDown containsObject:@(0xA2)]) flags |= MODIFIER_CTRL;
+    if ([keysDown containsObject:@(0xA4)]) flags |= MODIFIER_ALT;
+    if ([keysDown containsObject:@(0x5B)]) flags |= MODIFIER_META;
+    return flags;
+}
+
+- (void)rotateStream:(id)sender {
+    [interactionDelegate toggleStreamOrientation];
+}
+
+- (void)showKeyboard {
+    if (keyInputField.isFirstResponder) {
+        return;
+    }
+    if (keyInputField.inputAccessoryView == nil) {
+        keyInputField.inputAccessoryView = [self createKeyboardAccessory];
+    }
+    keyInputField.text = @"0";
+    isInputingText = [keyInputField becomeFirstResponder];
+    if (isInputingText) {
+        [keyInputField.undoManager disableUndoRegistration];
+    }
+}
+
+- (void)hideKeyboard {
+    [self releaseKeyboardKeys];
+    [keyInputField resignFirstResponder];
+    isInputingText = NO;
+    [self becomeFirstResponder];
+}
+
+- (void)toggleKeyboard {
+    if (keyInputField.isFirstResponder) {
+        [self hideKeyboard];
+    } else {
+        [self showKeyboard];
+    }
+}
+
+- (void)releaseKeyboardKeys {
+    [directionControl releaseHeldKey];
+    for (NSNumber* keyCode in keysDown) {
+        LiSendKeyboardEvent([keyCode shortValue], KEY_ACTION_UP, 0);
+    }
+    [keysDown removeAllObjects];
+    for (UIButton* button in modifierButtons) {
+        objc_setAssociatedObject(button, "isOn", @(NO), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        button.imageView.backgroundColor = [UIColor blackColor];
+    }
+}
+#endif
 
 - (UIBarButtonItem *)createButtonWithImageNamed:(NSString *)imageName backgroundColor:(UIColor *)backgroundColor target:(id)target action:(SEL)action keyCode:(NSInteger)keyCode isToggleable:(BOOL)isToggleable {
     UIImage *image = [UIImage imageNamed:imageName];
     UIButton *button = [UIButton buttonWithType:UIButtonTypeCustom];
     [button setImage:image forState:UIControlStateNormal];
-    button.frame = CGRectMake(0, 0, 30, 30);
+    button.frame = CGRectMake(0, 0, 44, 44);
     button.imageView.contentMode = UIViewContentModeScaleAspectFit;
     button.imageView.backgroundColor = backgroundColor;
     button.imageView.layer.cornerRadius = 10.0;
-    button.imageEdgeInsets = UIEdgeInsetsMake(6, 6, 6, 6);
+    button.imageEdgeInsets = UIEdgeInsetsMake(12, 12, 12, 12);
     [button addTarget:target action:action forControlEvents:UIControlEventTouchUpInside];
     objc_setAssociatedObject(button, "keyCode", @(keyCode), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     objc_setAssociatedObject(button, "isToggleable", @(isToggleable), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
@@ -425,8 +562,12 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
     short keyCode = [objc_getAssociatedObject(sender, "keyCode") shortValue];
     // Close keyboard if done button clicked
     if (!keyCode) {
+#if !TARGET_OS_TV
+        [self hideKeyboard];
+#else
         [keyInputField resignFirstResponder];
         isInputingText = false;
+#endif
     }
     else {
         // Send key press event using keyCode parameter, toggle if necessary
@@ -780,10 +921,15 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
 }
 
 - (void)textFieldDidEndEditing:(UITextField *)textField {
+#if !TARGET_OS_TV
+    [self releaseKeyboardKeys];
+#else
     for (NSNumber* keyCode in keysDown) {
         LiSendKeyboardEvent([keyCode shortValue], KEY_ACTION_UP, 0);
     }
     [keysDown removeAllObjects];
+#endif
+    isInputingText = NO;
 }
 
 - (void)onKeyboardPressed:(UITextField *)textField {
