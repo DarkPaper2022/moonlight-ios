@@ -72,8 +72,23 @@ checks do not validate UIKit touch delivery, layout, rotation or device behavior
 
 ### R2 — Apple build verification
 
-Pending macOS CI: iOS/tvOS Debug and Release simulator builds, and unsigned
-iOS Release IPA packaging. The development host is Linux without Xcode.
+Source commit: `e86621d465a94664b244bcd834d8e5200bb46e53`.
+The development host is Linux without Xcode; the checks ran on macOS CI.
+
+- [CI run 38390669429](https://github.com/DarkPaper2022/moonlight-ios/actions/runs/38390669429):
+  iOS and tvOS Debug and Release simulator builds all succeeded. The direction
+  transition test also passed with Apple clang.
+- [IPA run 38390703503](https://github.com/DarkPaper2022/moonlight-ios/actions/runs/38390703503):
+  unsigned iOS device Release build and IPA packaging succeeded.
+- Downloaded companion-workspace artifact:
+  `artifacts/Moonlight-PortraitKeyboard-v9.0.13.ipa`, 3,120,674 bytes.
+  SHA-256: `5a376e09cde710b7c0342c3b6e76eac3eba26c7196caa299aef64f9c4b152456`.
+- Verified ZIP integrity, internal version 9.0.13, iPhone/iPad portrait
+  orientation declarations and the new direction control in the app binary.
+
+Conclusion: both targets compile, and the unsigned iOS package is ready for
+device acceptance. Runtime touch behavior, layout and rotation remain untested
+on an iPad. No release tag, host deployment or software-source update was made.
 
 ## Device acceptance checklist
 

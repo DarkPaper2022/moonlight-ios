@@ -20,6 +20,15 @@ our `moonlight-common-c` fork.
 See [docs/audio-burst-guard.md](docs/audio-burst-guard.md) for the
 client integration details and expected behavior.
 
+## Fork additions: portrait keyboard streaming
+
+Version 9.0.13 adds an in-stream portrait/landscape button. Portrait places the
+video in the upper half and opens the keyboard below. The keyboard bar includes
+a direction control: press, drag toward an arrow and hold to keep that keyboard
+key down; release or change direction to release it. This feature keeps the
+9.0.11 audio implementation. See [docs/portrait-keyboard.md](docs/portrait-keyboard.md)
+for controls, build results and the pending device acceptance checks.
+
 [![Moonlight for iOS and tvOS](https://moonlight-stream.org/images/App_Store_Badge_135x40.svg)](https://apps.apple.com/us/app/moonlight-game-streaming/id1000551566)
 
 ## Building
