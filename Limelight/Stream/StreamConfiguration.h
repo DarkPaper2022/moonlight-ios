@@ -18,6 +18,8 @@
 @property int serverCodecModeSupport;
 @property int width;
 @property int height;
+@property BOOL nativeResolution;
+@property BOOL nativeResolutionUsesSafeArea;
 @property int frameRate;
 @property int bitRate;
 @property int riKeyId;

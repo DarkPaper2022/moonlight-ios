@@ -13,6 +13,7 @@
 #import "ControllerSupport.h"
 #import "DataManager.h"
 #include "StreamLayoutState.h"
+#include "StreamVideoGeometry.h"
 
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -64,6 +65,38 @@
 #endif
 }
 
+- (void)startStreamWithLaidOutViewport {
+    if (_streamMan != nil || self.view.window == nil) {
+        return;
+    }
+    // The view must be attached and laid out before negotiating native pixels.
+    [self.view layoutIfNeeded];
+#if !TARGET_OS_TV
+    if (self.streamConfig.nativeResolution) {
+        CGRect viewport = _videoContainer.bounds;
+        if (self.streamConfig.nativeResolutionUsesSafeArea) {
+            CGRect safeArea = [self.view convertRect:self.view.safeAreaLayoutGuide.layoutFrame toView:_videoContainer];
+            viewport = CGRectIntersection(viewport, safeArea);
+        }
+        StreamPixelSize pixels = StreamNativePixelsForViewport(viewport.size.width, viewport.size.height,
+                                                               self.view.window.screen.scale);
+        if (pixels.width > 0 && pixels.height > 0) {
+            Log(LOG_I, @"Native video viewport: %.0fx%.0f pt -> %dx%d px (previous profile %dx%d)",
+                viewport.size.width, viewport.size.height, pixels.width, pixels.height,
+                self.streamConfig.width, self.streamConfig.height);
+            self.streamConfig.width = pixels.width;
+            self.streamConfig.height = pixels.height;
+        }
+    }
+#endif
+    [_streamView setStreamVideoSize:CGSizeMake(self.streamConfig.width, self.streamConfig.height)];
+    _streamMan = [[StreamManager alloc] initWithConfig:self.streamConfig
+                                         renderView:_streamView
+                                connectionCallbacks:self];
+    NSOperationQueue* opQueue = [[NSOperationQueue alloc] init];
+    [opQueue addOperation:_streamMan];
+}
+
 - (void)viewDidAppear:(BOOL)animated
 {
     [super viewDidAppear:animated];
@@ -72,6 +105,7 @@
     [[self revealViewController] setPrimaryViewController:self];
     [self invalidateOrientationPolicy];
 #endif
+    [self startStreamWithLaidOutViewport];
 }
 
 #if TARGET_OS_TV
@@ -167,12 +201,6 @@
     _tipLabel.textColor = [UIColor whiteColor];
     _tipLabel.textAlignment = NSTextAlignmentCenter;
     _tipLabel.center = CGPointMake(self.view.frame.size.width / 2, self.view.frame.size.height * 0.9);
-    
-    _streamMan = [[StreamManager alloc] initWithConfig:self.streamConfig
-                                            renderView:_streamView
-                                   connectionCallbacks:self];
-    NSOperationQueue* opQueue = [[NSOperationQueue alloc] init];
-    [opQueue addOperation:_streamMan];
     
     [[NSNotificationCenter defaultCenter] addObserver:self
                                              selector:@selector(applicationWillResignActive:)
@@ -301,7 +329,6 @@
 - (void)updateStreamLayoutForPortrait:(BOOL)portrait {
     [NSLayoutConstraint deactivateConstraints:_portraitLayout ? _portraitConstraints : _landscapeConstraints];
     _portraitLayout = portrait;
-    [_streamView setVideoAreaFilled:portrait];
     [NSLayoutConstraint activateConstraints:portrait ? _portraitConstraints : _landscapeConstraints];
     _rotationButton.accessibilityLabel = portrait ? @"Switch to full-screen video" : @"Switch to video and keyboard";
 }

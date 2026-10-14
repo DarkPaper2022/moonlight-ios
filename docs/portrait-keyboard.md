@@ -1,6 +1,6 @@
 # Portrait streaming and directional keyboard control
 
-Version: 9.0.14. Base: `v9.0.11-audiodelay` (`0cd848e`).
+Version: 9.0.15. Base: `v9.0.11-audiodelay` (`0cd848e`).
 The common-c gitlink remains `19d67932d77b5c86c7553b91b0294081573c60e2`;
 this feature does not change the 9.0.11 audio implementation or host configuration.
 
@@ -9,9 +9,10 @@ this feature does not change the 9.0.11 audio implementation or host configurati
 - During a connected iOS stream, tap the rotation button in the upper-right
   corner, or the rotation button on the keyboard bar, to switch orientation.
 - Portrait reserves the upper half of the safe area for the video and the lower
-  half for keyboard input. The system keyboard opens automatically. Video fills
-  the entire upper viewport, retaining the whole desktop and stretching if the
-  aspect ratios differ. Absolute touch and mouse coordinates use the same geometry.
+  half for keyboard input. The system keyboard opens automatically. Video is
+  aspect-fit without stretching. Native resolution is negotiated from the
+  actual laid-out video viewport rather than the whole portrait display.
+  Absolute touch and mouse coordinates use the same video geometry.
 - The keyboard button shows or hides the keyboard in either orientation. The
   existing three-finger gesture and Done button still work. Switching back to
   landscape hides the keyboard and restores the full-screen stream.
@@ -28,6 +29,16 @@ this feature does not change the 9.0.11 audio implementation or host configurati
   held toolbar keys. Viewport changes reset absolute-mode zoom to fit.
 
 ## Layout and platform details
+
+The portrait video viewport is half of the safe area. Native/Native Safe Area
+are adaptive modes: after the view appears and layout completes, the connection
+uses this viewport in points times its own screen scale, rounded down to even
+encoder dimensions. A legacy full portrait native profile (such as 1668x2388)
+is migrated automatically; ordinary fixed and other custom sizes stay fixed.
+Both layouts retain aspect-fit; server padding is not stretched.
+
+The video stream starts after viewport layout, so renderer and input mapping
+receive the final negotiated dimensions before any network launch/resume.
 
 The portrait video viewport is half of the safe area. On small phones, it may
 shrink further to avoid a docked keyboard taller than the lower half. System
@@ -149,13 +160,48 @@ Conclusion: builds, regression tests and source publication pass. Actual
 LiveContainer/iPad rotation, layout and touch alignment still need device
 confirmation.
 
+### R4 — screenshot and native encoder pixel budget (2026-10-14)
+
+The user supplied a 1080x1546 portrait screenshot showing the desktop as a narrow
+full-width band in the upper half, and requested no stretching. Read-only host
+checks found capture output HDMI-A-1 at 2560x1440, while the active H.265 encoder
+session was 1668x2388: the full portrait iPad native pixel grid. The short-lived
+`nvidia-smi encodersessions` monitor was stopped by its confirmed PID; Sunshine
+and display configuration were not changed.
+
+This establishes the missing layer in R3's diagnosis: Sunshine first aspect-fits
+the landscape desktop into the portrait encoded canvas, including black bands.
+R3 then stretched the entire padded canvas into a half-height viewport. A
+2560x1440 desktop occupies 1668x938.25 inside a 1668x2388 frame; scaling that whole
+frame to 1668x1194 compresses desktop height to 469.125. Aspect-fit alone would
+instead reduce its width to 834, still using only half the available width.
+
+Version 9.0.15 restores aspect-fit and fixes native resolution at the source of
+negotiation: layout first, then request pixels for the actual video viewport.
+For an 834x597-point upper viewport at 2x scale, the encoder request becomes
+1668x1194 and the same desktop occupies 1668x938.25 without distortion. Safe-area
+insets can reduce the actual viewport; it is measured, not assumed. Native mode
+is persisted separately from fixed dimensions, so future window changes and
+reconnections use the current viewport. The settings preview follows the same
+half-screen calculation. Renderer/input aspect ratio is refreshed before stream
+launch. This does not modify the host monitor resolution.
+
+The portable test now reproduces both failed fixes as negative controls and
+asserts full-width desktop visibility with correct 16:9 proportions after
+viewport-native negotiation. It also checks legacy migration, untouched ordinary
+fixed/custom profiles, scaling, encoder even dimensions and limits. All local
+checks pass with ASan/UBSan. Apple builds and 9.0.15 device confirmation are pending.
+
 ## Device acceptance checklist
 
 Still pending; do not treat a CI build as device acceptance.
 
 1. Connect from iPad; rotate to portrait using each button. Confirm video is in
    the upper half, the keyboard is below, and the stream stays connected.
-2. Type Latin and Chinese text, Backspace and Return; test the special-key row.
+2. With Native resolution, reconnect from portrait; verify the encoder uses the
+   actual upper viewport pixels and the desktop keeps its proportions and width.
+   Test fixed 1080p/custom settings and Native Safe Area, then type Latin and
+   Chinese text, Backspace and Return; test the special-key row.
 3. In an editor and a game, hold each direction for several seconds. Confirm
    repeat/movement continues after the finger stops moving and stops on release.
 4. Change direction and return to neutral; test Shift+arrows and Ctrl+arrows.

@@ -9,6 +9,7 @@
 #import "SettingsViewController.h"
 #import "TemporarySettings.h"
 #import "DataManager.h"
+#include "StreamVideoGeometry.h"
 
 #import <VideoToolbox/VideoToolbox.h>
 #import <AVFoundation/AVFoundation.h>
@@ -176,11 +177,20 @@ BOOL isCustomResolution(CGSize res) {
     _bitrate = bitrateTable[[self getSliderValueForBitrate:[currentSettings.bitrate intValue]]];
 
     // Get the size of the screen with and without safe area insets
-    UIWindow *window = UIApplication.sharedApplication.windows.firstObject;
+    UIWindow *window = self.view.window ?: UIApplication.sharedApplication.windows.firstObject;
     CGFloat screenScale = window.screen.scale;
-    CGFloat safeAreaWidth = (window.frame.size.width - window.safeAreaInsets.left - window.safeAreaInsets.right) * screenScale;
-    CGFloat fullScreenWidth = window.frame.size.width * screenScale;
-    CGFloat fullScreenHeight = window.frame.size.height * screenScale;
+    CGSize viewport = window.bounds.size;
+    CGSize safeViewport = CGSizeMake(viewport.width - window.safeAreaInsets.left - window.safeAreaInsets.right,
+                                     viewport.height - window.safeAreaInsets.top - window.safeAreaInsets.bottom);
+    if (!TARGET_OS_TV && viewport.height > viewport.width) {
+        // Native now previews the portrait video viewport, not the entire
+        // portrait window (whose lower half is reserved for keyboard input).
+        viewport.height /= 2.0;
+        safeViewport.height /= 2.0;
+    }
+    if (TARGET_OS_TV) safeViewport.height = viewport.height;
+    StreamPixelSize nativePixels = StreamNativePixelsForViewport(viewport.width, viewport.height, screenScale);
+    StreamPixelSize safePixels = StreamNativePixelsForViewport(safeViewport.width, safeViewport.height, screenScale);
     
     self.resolutionDisplayView.layer.cornerRadius = 10;
     self.resolutionDisplayView.clipsToBounds = YES;
@@ -191,8 +201,8 @@ BOOL isCustomResolution(CGSize res) {
     resolutionTable[1] = CGSizeMake(1280, 720);
     resolutionTable[2] = CGSizeMake(1920, 1080);
     resolutionTable[3] = CGSizeMake(3840, 2160);
-    resolutionTable[4] = CGSizeMake(safeAreaWidth, fullScreenHeight);
-    resolutionTable[5] = CGSizeMake(fullScreenWidth, fullScreenHeight);
+    resolutionTable[4] = CGSizeMake(safePixels.width, safePixels.height);
+    resolutionTable[5] = CGSizeMake(nativePixels.width, nativePixels.height);
     resolutionTable[6] = CGSizeMake([currentSettings.width integerValue], [currentSettings.height integerValue]); // custom initial value
     
     // Don't populate the custom entry unless we have a custom resolution
@@ -221,6 +231,14 @@ BOOL isCustomResolution(CGSize res) {
             resolution = i;
             break;
         }
+    }
+    NSString* resolutionMode = [[NSUserDefaults standardUserDefaults] stringForKey:@"streamResolutionMode"];
+    if ([resolutionMode isEqualToString:@"native-safe"]) {
+        resolution = 4;
+    } else if ([resolutionMode isEqualToString:@"native"] ||
+               (resolutionMode == nil && StreamResolutionIsLegacyPortraitNative([currentSettings.width intValue],
+                   [currentSettings.height intValue], window.screen.nativeBounds.size.width, window.screen.nativeBounds.size.height))) {
+        resolution = 5;
     }
 
     // Only show the 120 FPS option if we have a > 60-ish Hz display
@@ -608,6 +626,11 @@ BOOL isCustomResolution(CGSize res) {
     NSInteger framerate = [self getChosenFrameRate];
     NSInteger height = [self getChosenStreamHeight];
     NSInteger width = [self getChosenStreamWidth];
+    BOOL customResolution = self.resolutionSelector.selectedSegmentIndex == self.resolutionSelector.numberOfSegments - 1;
+    NSInteger resolutionIndex = self.resolutionSelector.selectedSegmentIndex;
+    NSString* resolutionMode = !customResolution && resolutionIndex == 4 ? @"native-safe" :
+                               !customResolution && resolutionIndex == 5 ? @"native" : @"fixed";
+    [[NSUserDefaults standardUserDefaults] setObject:resolutionMode forKey:@"streamResolutionMode"];
     NSInteger onscreenControls = [self.onscreenControlSelector selectedSegmentIndex];
     BOOL optimizeGames = [self.optimizeSettingsSelector selectedSegmentIndex] == 1;
     BOOL multiController = [self.multiControllerSelector selectedSegmentIndex] == 1;

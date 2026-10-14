@@ -36,21 +36,47 @@ int main(void) {
     assert(!fresh.sceneRotationUnavailable);
     assert(fresh.mode == StreamLayoutFullscreen);
     assert(!StreamLayoutRotatesVideo(&fresh, 820, 1180));
-    // Reproduce a wide desktop looking half-height in the upper viewport.
-    // Keyboard mode must use the whole viewport, including after resize.
-    StreamVideoSize fit = StreamVideoSizeForViewport(820, 573, 32.0 / 9.0, false);
-    assert(fit.width == 820 && fit.height < 573 / 2.0);
-    StreamVideoSize fill = StreamVideoSizeForViewport(820, 573, 32.0 / 9.0, true);
-    assert(fill.width == 820 && fill.height == 573);
-    fill = StreamVideoSizeForViewport(500, 350, 16.0 / 9.0, true);
-    assert(fill.width == 500 && fill.height == 350);
-    fit = StreamVideoSizeForViewport(1920, 1080, 16.0 / 9.0, false);
+    // Real report: 1668x2388 portrait encoding, 2560x1440 host desktop.
+    // Sunshine fits the desktop inside the entire portrait bitstream first.
+    const double desktopAspect = 2560.0 / 1440.0;
+    StreamVideoSize oldContent = StreamVideoSizeForViewport(1668, 2388, desktopAspect);
+    assert(oldContent.width == 1668 && oldContent.height == 938.25);
+    double oldStretchedHeight = oldContent.height * 1194.0 / 2388.0;
+    assert(oldStretchedHeight == 469.125);
+    assert(oldContent.width / oldStretchedHeight == desktopAspect * 2.0);
+
+    // Aspect fit alone still shrinks the portrait encoded canvas to half width.
+    StreamVideoSize oldClient = StreamVideoSizeForViewport(1668, 1194, 1668.0 / 2388.0);
+    assert(oldClient.width == 834 && oldClient.height == 1194);
+
+    // Negotiate from actual upper viewport points at 2x screen scale instead.
+    StreamPixelSize native = StreamNativePixelsForViewport(834, 597, 2);
+    assert(native.width == 1668 && native.height == 1194);
+    StreamVideoSize newContent = StreamVideoSizeForViewport(native.width, native.height, desktopAspect);
+    StreamVideoSize newClient = StreamVideoSizeForViewport(1668, 1194, (double)native.width / native.height);
+    assert(newClient.width == 1668 && newClient.height == 1194);
+    assert(newContent.width == 1668 && newContent.height == 938.25);
+    assert(newContent.width / newContent.height == desktopAspect);
+    assert(newContent.height == oldStretchedHeight * 2.0);
+
+    assert(StreamResolutionIsLegacyPortraitNative(1668, 2388, 1668, 2388));
+    assert(StreamResolutionIsLegacyPortraitNative(1668, 2388, 2388, 1668));
+    assert(!StreamResolutionIsLegacyPortraitNative(1920, 1080, 1668, 2388));
+    assert(!StreamResolutionIsLegacyPortraitNative(900, 1600, 1668, 2388));
+    native = StreamNativePixelsForViewport(500, 350, 2);
+    assert(native.width == 1000 && native.height == 700);
+    native = StreamNativePixelsForViewport(833.9, 588.7, 2);
+    assert(native.width == 1666 && native.height == 1176);
+    native = StreamNativePixelsForViewport(6000, 5000, 2);
+    assert(native.width == 8192 && native.height == 8192);
+    native = StreamNativePixelsForViewport(0, 500, 2);
+    assert(native.width == 0 && native.height == 0);
+    StreamVideoSize fit = StreamVideoSizeForViewport(1920, 1080, desktopAspect);
     assert(fit.width == 1920 && fit.height == 1080);
-    fit = StreamVideoSizeForViewport(1000, 400, 16.0 / 9.0, false);
+    fit = StreamVideoSizeForViewport(1000, 400, desktopAspect);
     assert(fit.height == 400 && fit.width < 1000);
-    StreamVideoSize empty = StreamVideoSizeForViewport(0, 400, 16.0 / 9.0, true);
-    assert(empty.width == 0 && empty.height == 0);
     puts("PASS: denied rotation retains selected layout; toggling, resizing and stale errors");
-    puts("PASS: keyboard video fills entire viewport; full-screen aspect fit and empty bounds");
+    puts("PASS: reproduce 1668x2388 double letterboxing; viewport-native encoding restores size without stretching");
+    puts("PASS: legacy native migration, other fixed/custom sizes, view scaling and even encoder dimensions");
     return 0;
 }

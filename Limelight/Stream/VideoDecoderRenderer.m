@@ -43,8 +43,7 @@ extern int ff_isom_write_av1c(AVIOContext *pb, const uint8_t *buf, int size,
     displayLayer = [[AVSampleBufferDisplayLayer alloc] init];
     displayLayer.backgroundColor = [UIColor blackColor].CGColor;
     
-    // Share geometry with StreamView's touch/pointer mapping. Keyboard layout
-    // fills its viewport, while full-screen layout preserves the stream ratio.
+    // Share aspect-fit geometry with StreamView's touch/pointer mapping.
     CGSize videoSize = [_view getVideoAreaSize];
     displayLayer.position = CGPointMake(CGRectGetMidX(_view.bounds), CGRectGetMidY(_view.bounds));
     displayLayer.bounds = CGRectMake(0, 0, videoSize.width, videoSize.height);

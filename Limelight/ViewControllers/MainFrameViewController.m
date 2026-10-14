@@ -21,6 +21,7 @@
 #import "AppListResponse.h"
 #import "ServerInfoResponse.h"
 #import "StreamFrameViewController.h"
+#include "StreamVideoGeometry.h"
 #import "LoadingFrameViewController.h"
 #import "ComputerScrollView.h"
 #import "TemporaryApp.h"
@@ -623,6 +624,22 @@ static NSMutableSet* hostList;
     
     _streamConfig.height = [streamSettings.height intValue];
     _streamConfig.width = [streamSettings.width intValue];
+#if !TARGET_OS_TV
+    NSString* resolutionMode = [[NSUserDefaults standardUserDefaults] stringForKey:@"streamResolutionMode"];
+    if (resolutionMode == nil) {
+        // 9.0.13/14 saved "Native" as the full portrait display size. Migrate
+        // exactly that profile; ordinary fixed and other custom sizes stay fixed.
+        UIScreen* screen = self.view.window.screen ?: [UIScreen mainScreen];
+        CGSize pixels = screen.nativeBounds.size;
+        if (StreamResolutionIsLegacyPortraitNative(_streamConfig.width, _streamConfig.height,
+                                                   pixels.width, pixels.height)) {
+            resolutionMode = @"native";
+            [[NSUserDefaults standardUserDefaults] setObject:resolutionMode forKey:@"streamResolutionMode"];
+        }
+    }
+    _streamConfig.nativeResolution = [resolutionMode isEqualToString:@"native"] || [resolutionMode isEqualToString:@"native-safe"];
+    _streamConfig.nativeResolutionUsesSafeArea = [resolutionMode isEqualToString:@"native-safe"];
+#endif
 #if TARGET_OS_TV
     // Don't allow streaming 4K on the Apple TV HD
     struct utsname systemInfo;

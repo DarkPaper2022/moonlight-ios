@@ -34,7 +34,7 @@
 - (void) showOnScreenControls;
 - (OnScreenControlsLevel) getCurrentOscState;
 - (CGSize) getVideoAreaSize;
-- (void) setVideoAreaFilled:(BOOL)filled;
+- (void) setStreamVideoSize:(CGSize)size;
 
 #if !TARGET_OS_TV
 - (void) updateCursorLocation:(CGPoint)location isMouse:(BOOL)isMouse;

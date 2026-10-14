@@ -32,7 +32,6 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
 #endif
     
     float streamAspectRatio;
-    BOOL videoAreaFilled;
     
     // iOS 13.4 mouse support
     NSInteger lastMouseButtonMask;
@@ -207,13 +206,13 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
 
 - (CGSize) getVideoAreaSize {
     StreamVideoSize size = StreamVideoSizeForViewport(self.bounds.size.width, self.bounds.size.height,
-                                                     streamAspectRatio, videoAreaFilled);
+                                                     streamAspectRatio);
     return CGSizeMake(size.width, size.height);
 }
 
-- (void)setVideoAreaFilled:(BOOL)filled {
-    if (videoAreaFilled != filled) {
-        videoAreaFilled = filled;
+- (void)setStreamVideoSize:(CGSize)size {
+    if (size.width > 0 && size.height > 0) {
+        streamAspectRatio = size.width / size.height;
         [self setNeedsLayout];
     }
 }
