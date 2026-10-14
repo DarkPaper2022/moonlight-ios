@@ -171,7 +171,7 @@ and display configuration were not changed.
 
 This establishes the missing layer in R3's diagnosis: Sunshine first aspect-fits
 the landscape desktop into the portrait encoded canvas, including black bands.
-R3 then stretched the entire padded canvas into a half-height viewport. A
+R3 then stretched the entire padded canvas into a half-height viewport. In ideal continuous geometry before encoder integer rounding, a
 2560x1440 desktop occupies 1668x938.25 inside a 1668x2388 frame; scaling that whole
 frame to 1668x1194 compresses desktop height to 469.125. Aspect-fit alone would
 instead reduce its width to 834, still using only half the available width.
@@ -190,7 +190,28 @@ The portable test now reproduces both failed fixes as negative controls and
 asserts full-width desktop visibility with correct 16:9 proportions after
 viewport-native negotiation. It also checks legacy migration, untouched ordinary
 fixed/custom profiles, scaling, encoder even dimensions and limits. All local
-checks pass with ASan/UBSan. Apple builds and 9.0.15 device confirmation are pending.
+checks pass with ASan/UBSan.
+
+Apple verification for source `58dce8b654263fdb0100674c30ede7b01504a243`:
+
+- [CI run 38492356472](https://github.com/DarkPaper2022/moonlight-ios/actions/runs/38492356472):
+  iOS/tvOS Debug and Release simulator builds passed; input/layout tests passed
+  with Apple clang.
+- [IPA run 38492372219](https://github.com/DarkPaper2022/moonlight-ios/actions/runs/38492372219):
+  unsigned iOS device Release build and IPA packaging passed.
+- Package: `artifacts/Moonlight-PortraitKeyboard-v9.0.15.ipa` in the companion
+  workspace, 3,123,802 bytes, SHA-256
+  `8ab7e11713e47e92c6acee95300190643a6c6a22120545a1338e630b77568a28`.
+  Verified archive integrity, internal version, adaptive native-resolution code
+  in the binary, and removal of the old stretch method.
+- Nginx file, software source, homepage, configuration and cache are synchronized
+  to 9.0.15. Complete live HTTPS download matches size and SHA-256; the live source
+  and homepage advertise 9.0.15 and the correct download/installation URLs.
+
+Conclusion: the pixel-budget regression is explained by observed host/encoder
+sizes and covered by a failing old-pipeline model plus the corrected negotiation
+model. Builds and publication pass. iPad display and the new actual encoder size
+still require an updated client and a fresh stream connection to confirm.
 
 ## Device acceptance checklist
 
