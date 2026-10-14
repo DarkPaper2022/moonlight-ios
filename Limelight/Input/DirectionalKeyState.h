@@ -1,11 +1,11 @@
 #pragma once
 
-#include <math.h>
+#include <stdbool.h>
 #include <stdint.h>
 
-// Win32 VK codes, as used by the GameStream keyboard protocol.
+// Independent Win32 VK directions permit simultaneous holds (e.g. diagonals).
 typedef struct {
-    uint16_t heldKey;
+    uint8_t pressedMask;
 } DirectionalKeyState;
 
 typedef struct {
@@ -13,24 +13,26 @@ typedef struct {
     uint16_t keyDown;
 } DirectionalKeyTransition;
 
-static inline uint16_t DirectionalKeyForOffset(float x, float y) {
-    // A neutral zone lets the user release a direction without lifting.
-    if (fabsf(x) < 10.0f && fabsf(y) < 10.0f) {
-        return 0;
-    }
-    if (fabsf(x) > fabsf(y)) {
-        return x < 0 ? 0x25 : 0x27;
-    }
-    return y < 0 ? 0x26 : 0x28;
+static inline uint8_t DirectionalKeyMask(uint16_t key) {
+    return key >= 0x25 && key <= 0x28 ? (uint8_t)(1u << (key - 0x25)) : 0;
 }
 
-static inline DirectionalKeyTransition DirectionalKeySetHeldKey(DirectionalKeyState* state,
-                                                                 uint16_t key) {
+static inline bool DirectionalKeyIsPressed(const DirectionalKeyState* state, uint16_t key) {
+    return (state->pressedMask & DirectionalKeyMask(key)) != 0;
+}
+
+static inline DirectionalKeyTransition DirectionalKeySetPressed(DirectionalKeyState* state,
+                                                                uint16_t key, bool pressed) {
     DirectionalKeyTransition transition = {0, 0};
-    if (state->heldKey != key) {
-        transition.keyUp = state->heldKey;
-        transition.keyDown = key;
-        state->heldKey = key;
+    uint8_t mask = DirectionalKeyMask(key);
+    if (mask && DirectionalKeyIsPressed(state, key) != pressed) {
+        if (pressed) {
+            state->pressedMask |= mask;
+            transition.keyDown = key;
+        } else {
+            state->pressedMask &= (uint8_t)~mask;
+            transition.keyUp = key;
+        }
     }
     return transition;
 }

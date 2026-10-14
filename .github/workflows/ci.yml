@@ -48,6 +48,11 @@ jobs:
       - name: Download ${{ matrix.platform }} platform
         run: xcodebuild -downloadPlatform ${{ matrix.platform }}
 
+      - name: Exercise UIKit directional buttons
+        if: matrix.platform == 'iOS'
+        timeout-minutes: 8
+        run: bash tests/run_directional_key_control.sh
+
       - name: Build Debug
         run: xcodebuild -project Moonlight.xcodeproj -scheme "${{ matrix.scheme }}" -configuration Debug -sdk ${{ matrix.sdk }} clean build
 

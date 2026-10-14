@@ -473,7 +473,7 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
         [bar.bottomAnchor constraintEqualToAnchor:accessory.bottomAnchor constant:-4],
         [done.widthAnchor constraintEqualToConstant:44],
         [rotate.widthAnchor constraintEqualToConstant:44],
-        [directionControl.widthAnchor constraintEqualToConstant:68]
+        [directionControl.widthAnchor constraintEqualToConstant:188]
     ]];
     return accessory;
 }

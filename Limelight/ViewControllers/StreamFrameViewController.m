@@ -73,15 +73,15 @@
     [self.view layoutIfNeeded];
 #if !TARGET_OS_TV
     if (self.streamConfig.nativeResolution) {
-        CGRect viewport = _videoContainer.bounds;
+        CGRect viewport = self.view.bounds;
         if (self.streamConfig.nativeResolutionUsesSafeArea) {
-            CGRect safeArea = [self.view convertRect:self.view.safeAreaLayoutGuide.layoutFrame toView:_videoContainer];
+            CGRect safeArea = self.view.safeAreaLayoutGuide.layoutFrame;
             viewport = CGRectIntersection(viewport, safeArea);
         }
-        StreamPixelSize pixels = StreamNativePixelsForViewport(viewport.size.width, viewport.size.height,
+        StreamPixelSize pixels = StreamNativePixelsForWindow(viewport.size.width, viewport.size.height,
                                                                self.view.window.screen.scale);
         if (pixels.width > 0 && pixels.height > 0) {
-            Log(LOG_I, @"Native video viewport: %.0fx%.0f pt -> %dx%d px (previous profile %dx%d)",
+            Log(LOG_I, @"Native landscape pixel budget: %.0fx%.0f pt -> %dx%d px (previous profile %dx%d)",
                 viewport.size.width, viewport.size.height, pixels.width, pixels.height,
                 self.streamConfig.width, self.streamConfig.height);
             self.streamConfig.width = pixels.width;

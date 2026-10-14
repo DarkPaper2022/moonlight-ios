@@ -22,12 +22,12 @@ client integration details and expected behavior.
 
 ## Fork additions: portrait keyboard streaming
 
-Version 9.0.15 adds an in-stream portrait/landscape button and local rotation
+Version 9.0.16 adds an in-stream portrait/landscape button and local rotation
 when the host window refuses scene rotation. Portrait places the
 video in the upper half and opens the keyboard below. Native resolution uses
-the actual video viewport pixel budget; video preserves its aspect ratio. The keyboard bar includes
-a direction control: press, drag toward an arrow and hold to keep that keyboard
-key down; release or change direction to release it. This feature keeps the
+a complete landscape pixel budget from connection start, keeping rotation crisp;
+video preserves its aspect ratio in both layouts. The keyboard bar includes four
+arrow buttons: press and hold to keep a keyboard key down, and release to stop. This feature keeps the
 9.0.11 audio implementation. See [docs/portrait-keyboard.md](docs/portrait-keyboard.md)
 for controls, build results and the pending device acceptance checks.
 

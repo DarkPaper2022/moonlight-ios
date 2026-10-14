@@ -1,5 +1,6 @@
 #include <assert.h>
 #include <stdio.h>
+#include <math.h>
 
 #include "../Limelight/Input/StreamLayoutState.h"
 #include "../Limelight/Input/StreamVideoGeometry.h"
@@ -59,6 +60,28 @@ int main(void) {
     assert(newContent.width / newContent.height == desktopAspect);
     assert(newContent.height == oldStretchedHeight * 2.0);
 
+    // R5: an upper-half encoding is enlarged 2388/1668 after rotating. Reserve
+    // the SAME landscape-native canvas for either connection orientation.
+    StreamPixelSize portraitStart = StreamNativePixelsForWindow(834, 1194, 2);
+    StreamPixelSize landscapeStart = StreamNativePixelsForWindow(1194, 834, 2);
+    assert(portraitStart.width == 2388 && portraitStart.height == 1668);
+    assert(portraitStart.width == landscapeStart.width && portraitStart.height == landscapeStart.height);
+    assert(native.width < portraitStart.width); // the old 9.0.15 regression
+    StreamVideoSize reservedContent = StreamVideoSizeForViewport(portraitStart.width, portraitStart.height, desktopAspect);
+    StreamVideoSize portraitFit = StreamVideoSizeForViewport(1668, 1194, (double)portraitStart.width / portraitStart.height);
+    double portraitScale = portraitFit.width / portraitStart.width;
+    assert(portraitFit.width == 1668);
+    assert(fabs(reservedContent.height * portraitScale - 938.25) < 0.000001);
+    assert(fabs(reservedContent.width / reservedContent.height - desktopAspect) < 0.000001);
+    StreamVideoSize landscapeFit = StreamVideoSizeForViewport(2388, 1668, (double)portraitStart.width / portraitStart.height);
+    assert(landscapeFit.width == portraitStart.width && landscapeFit.height == portraitStart.height);
+    // Safe-area native reservation also ignores starting orientation.
+    StreamPixelSize safePortrait = StreamNativePixelsForWindow(834, 1164, 2);
+    StreamPixelSize safeLandscape = StreamNativePixelsForWindow(1164, 834, 2);
+    assert(safePortrait.width == safeLandscape.width && safePortrait.height == safeLandscape.height);
+    StreamPixelSize invalidWindow = StreamNativePixelsForWindow(834, 0, 2);
+    assert(!invalidWindow.width && !invalidWindow.height);
+
     assert(StreamResolutionIsLegacyPortraitNative(1668, 2388, 1668, 2388));
     assert(StreamResolutionIsLegacyPortraitNative(1668, 2388, 2388, 1668));
     assert(!StreamResolutionIsLegacyPortraitNative(1920, 1080, 1668, 2388));
@@ -78,5 +101,6 @@ int main(void) {
     puts("PASS: denied rotation retains selected layout; toggling, resizing and stale errors");
     puts("PASS: reproduce 1668x2388 double letterboxing; viewport-native encoding restores size without stretching");
     puts("PASS: legacy native migration, other fixed/custom sizes, view scaling and even encoder dimensions");
+    puts("PASS: portrait and landscape starts reserve identical native pixels; portrait stays full-width and proportional");
     return 0;
 }

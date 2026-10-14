@@ -1,6 +1,6 @@
 # Portrait streaming and directional keyboard control
 
-Version: 9.0.15. Base: `v9.0.11-audiodelay` (`0cd848e`).
+Version: 9.0.16. Base: `v9.0.11-audiodelay` (`0cd848e`).
 The common-c gitlink remains `19d67932d77b5c86c7553b91b0294081573c60e2`;
 this feature does not change the 9.0.11 audio implementation or host configuration.
 
@@ -10,20 +10,19 @@ this feature does not change the 9.0.11 audio implementation or host configurati
   corner, or the rotation button on the keyboard bar, to switch orientation.
 - Portrait reserves the upper half of the safe area for the video and the lower
   half for keyboard input. The system keyboard opens automatically. Video is
-  aspect-fit without stretching. Native resolution is negotiated from the
-  actual laid-out video viewport rather than the whole portrait display.
+  aspect-fit without stretching. Native resolution reserves the full landscape
+  window pixel budget when connecting, even when starting in portrait.
   Absolute touch and mouse coordinates use the same video geometry.
 - The keyboard button shows or hides the keyboard in either orientation. The
   existing three-finger gesture and Done button still work. Switching back to
   landscape hides the keyboard and restores the full-screen stream.
-- Press the `↕ ↔` control, drag up/down/left/right, and keep the finger down to
-  hold that keyboard arrow. Changing direction releases the old key before
-  pressing the new one. Returning within 10 points of the initial touch location
-  releases the key. Lifting or cancelling releases it too.
+- Hold one of the four `← ↑ ↓ →` buttons to keep that keyboard arrow down.
+  Lift, drag outside the button or cancel to release it; drag back inside to
+  press again. Two buttons can be held simultaneously for a diagonal.
 - Direction input sends keyboard DOWN/UP events, including modifier flags for
   latched Shift/Ctrl/Alt/Windows keys. Sunshine handles keyboard autorepeat;
   the client does not synthesize repeated taps or gamepad directions.
-- The direction control and rotation button remain visible on narrow screens;
+- The four arrow buttons and rotation button remain visible on narrow screens;
   the special-key row scrolls horizontally independently of the direction control.
 - Rotation, keyboard dismissal, application inactivity and stream exit release
   held toolbar keys. Viewport changes reset absolute-mode zoom to fit.
@@ -31,11 +30,16 @@ this feature does not change the 9.0.11 audio implementation or host configurati
 ## Layout and platform details
 
 The portrait video viewport is half of the safe area. Native/Native Safe Area
-are adaptive modes: after the view appears and layout completes, the connection
-uses this viewport in points times its own screen scale, rounded down to even
-encoder dimensions. A legacy full portrait native profile (such as 1668x2388)
-is migrated automatically; ordinary fixed and other custom sizes stay fixed.
-Both layouts retain aspect-fit; server padding is not stretched.
+reserve a landscape encoded canvas from the laid-out full window: longer side
+as width, shorter side as height, multiplied by the window's screen scale and
+rounded down to even dimensions. Safe Area subtracts the current safe insets.
+This reserves the same full-resolution pixels for either starting orientation
+and avoids enlarging a low-resolution upper-half stream when switching to
+landscape. It also avoids the old full-portrait server padding: portrait only
+scales the landscape frame uniformly to its upper viewport. This uses more
+encoder/decoder pixels than the 9.0.15 half-screen request; bitrate stays as
+configured. Fixed/custom resolutions remain fixed. A legacy full-portrait
+native profile is still migrated automatically. Reconnect after updating.
 
 The video stream starts after viewport layout, so renderer and input mapping
 receive the final negotiated dimensions before any network launch/resume.
@@ -213,6 +217,42 @@ sizes and covered by a failing old-pipeline model plus the corrected negotiation
 model. Builds and publication pass. iPad display and the new actual encoder size
 still require an updated client and a fresh stream connection to confirm.
 
+### R5 — landscape pixel reservation and four-button input (2026-10-14)
+
+The user reported lower resolution after portrait-to-landscape rotation and
+nonfunctional directional input, and approved four separate arrow buttons.
+9.0.15 negotiated only the initial upper viewport. Rotation changed its render
+size but retained that lower encoder resolution. 9.0.16 instead reserves a full
+landscape native canvas before launch: a 834x1194-point window at 2x requests
+2388x1668 pixels whether started portrait or landscape. The portrait upper area
+still shows the desktop at full width and its original aspect ratio; local
+90-degree fullscreen rotation has the same pixel budget as a landscape start.
+No reconnect occurs on each rotation and the host display is not changed.
+
+Read the primary [iSH ArrowBarButton implementation](https://github.com/ish-app/ish/blob/c5ebcabec14f1d8709e91e1905ce0edd7cb9c13c/app/ArrowBarButton.m).
+Its Objective-C selectors are `beginTrackingWithTouch:withEvent:`,
+`continueTrackingWithTouch:withEvent:` and `endTrackingWithTouch:withEvent:`.
+Our old control accidentally used Swift-style `beginTracking:withEvent:` etc.,
+so UIKit never invoked those methods. The portable transition test could not
+catch this delivery bug. iSH uses timers to emit terminal actions, whereas
+Moonlight must keep a GameStream keyboard DOWN active until UP (host repeat).
+
+Replaced drag selection with four standard UIButton target/actions: TouchDown
+presses immediately; lift inside/outside, cancel and drag exit release; drag
+enter presses again. Each button has independent state for simultaneous holds.
+Lifecycle cleanup releases every held direction once. The fixed 188-point arrow
+row holds four 44-point buttons; other special keys scroll independently.
+
+Verification: portable state/geometry tests pass under ASan/UBSan, including
+identical native dimensions for portrait and landscape starts, correct portrait
+desktop size, unchanged aspect ratio, diagonal holds and repeated cancellation.
+Added a running UIKit simulator test that dispatches standard control events
+through the real buttons, verifies immediate DOWN/UP delivery, cancellation,
+re-entry, simultaneous keys, layout and removal cleanup. This checks event
+wiring; physical finger delivery and LiveContainer behavior remain device checks.
+
+Apple builds and publication: pending.
+
 ## Device acceptance checklist
 
 Still pending; do not treat a CI build as device acceptance.
@@ -220,12 +260,14 @@ Still pending; do not treat a CI build as device acceptance.
 1. Connect from iPad; rotate to portrait using each button. Confirm video is in
    the upper half, the keyboard is below, and the stream stays connected.
 2. With Native resolution, reconnect from portrait; verify the encoder uses the
-   actual upper viewport pixels and the desktop keeps its proportions and width.
+   reserved landscape native pixels and the desktop keeps its proportions.
+   Rotate to full-screen and compare sharpness with a landscape-start connection.
    Test fixed 1080p/custom settings and Native Safe Area, then type Latin and
    Chinese text, Backspace and Return; test the special-key row.
 3. In an editor and a game, hold each direction for several seconds. Confirm
    repeat/movement continues after the finger stops moving and stops on release.
-4. Change direction and return to neutral; test Shift+arrows and Ctrl+arrows.
+4. Press two arrows together, release one, drag outside/back inside; test
+   Shift+arrows and Ctrl+arrows.
 5. While holding a direction, open Control Center, hide the keyboard or exit
    the stream. Confirm there is no stuck key after returning or reconnecting.
 6. Switch orientation repeatedly with both relative and absolute touch modes;

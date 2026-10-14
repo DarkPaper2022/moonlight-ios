@@ -33,8 +33,7 @@ static inline StreamPixelSize StreamNativePixelsForViewport(double width, double
     if (!(width > 0) || !(height > 0) || !(scale > 0)) {
         return size;
     }
-    // YUV 4:2:0 encoders need even dimensions; use actual drawable view points,
-    // not the physical display's full portrait pixel grid.
+    // YUV 4:2:0 encoders need even dimensions.
     double pixelWidth = width * scale;
     double pixelHeight = height * scale;
     if (pixelWidth > 8192.0) pixelWidth = 8192.0;
@@ -44,6 +43,14 @@ static inline StreamPixelSize StreamNativePixelsForViewport(double width, double
     if (size.width < 256) size.width = 256;
     if (size.height < 256) size.height = 256;
     return size;
+}
+
+// Reserve native landscape pixels at connection time, even when starting in
+// the keyboard layout. Rotation must not enlarge an upper-half-sized stream.
+// A landscape encoded canvas also avoids server-side portrait letterboxing.
+static inline StreamPixelSize StreamNativePixelsForWindow(double width, double height, double scale) {
+    return width >= height ? StreamNativePixelsForViewport(width, height, scale)
+                           : StreamNativePixelsForViewport(height, width, scale);
 }
 
 static inline bool StreamResolutionIsLegacyPortraitNative(int width, int height,

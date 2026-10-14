@@ -182,15 +182,9 @@ BOOL isCustomResolution(CGSize res) {
     CGSize viewport = window.bounds.size;
     CGSize safeViewport = CGSizeMake(viewport.width - window.safeAreaInsets.left - window.safeAreaInsets.right,
                                      viewport.height - window.safeAreaInsets.top - window.safeAreaInsets.bottom);
-    if (!TARGET_OS_TV && viewport.height > viewport.width) {
-        // Native now previews the portrait video viewport, not the entire
-        // portrait window (whose lower half is reserved for keyboard input).
-        viewport.height /= 2.0;
-        safeViewport.height /= 2.0;
-    }
     if (TARGET_OS_TV) safeViewport.height = viewport.height;
-    StreamPixelSize nativePixels = StreamNativePixelsForViewport(viewport.width, viewport.height, screenScale);
-    StreamPixelSize safePixels = StreamNativePixelsForViewport(safeViewport.width, safeViewport.height, screenScale);
+    StreamPixelSize nativePixels = StreamNativePixelsForWindow(viewport.width, viewport.height, screenScale);
+    StreamPixelSize safePixels = StreamNativePixelsForWindow(safeViewport.width, safeViewport.height, screenScale);
     
     self.resolutionDisplayView.layer.cornerRadius = 10;
     self.resolutionDisplayView.clipsToBounds = YES;

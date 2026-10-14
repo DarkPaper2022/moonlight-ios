@@ -4,89 +4,73 @@
 #if !TARGET_OS_TV
 @implementation DirectionalKeyControl {
     DirectionalKeyState _keyState;
-    CGPoint _dragOrigin;
-    BOOL _directionTracking;
-    UILabel* _directionLabel;
+    NSArray<UIButton*>* _buttons;
 }
 
 - (instancetype)initWithFrame:(CGRect)frame {
     self = [super initWithFrame:frame];
     if (self) {
-        self.backgroundColor = [UIColor colorWithWhite:0.2 alpha:1.0];
-        self.layer.cornerRadius = 8;
-        self.exclusiveTouch = YES;
-        self.isAccessibilityElement = YES;
-        self.accessibilityLabel = @"Direction keys";
-        self.accessibilityHint = @"Press and drag up, down, left, or right. Hold to keep the key pressed.";
-        self.accessibilityTraits = UIAccessibilityTraitButton;
-
-        _directionLabel = [[UILabel alloc] initWithFrame:self.bounds];
-        _directionLabel.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
-        _directionLabel.textAlignment = NSTextAlignmentCenter;
-        _directionLabel.textColor = [UIColor whiteColor];
-        _directionLabel.font = [UIFont systemFontOfSize:22 weight:UIFontWeightSemibold];
-        _directionLabel.text = @"↕ ↔";
-        [self addSubview:_directionLabel];
+        NSMutableArray<UIButton*>* buttons = [NSMutableArray array];
+        NSArray* titles = @[@"←", @"↑", @"↓", @"→"];
+        NSArray* labels = @[@"Left arrow", @"Up arrow", @"Down arrow", @"Right arrow"];
+        const unsigned short codes[] = {0x25, 0x26, 0x28, 0x27};
+        for (NSUInteger i = 0; i < titles.count; i++) {
+            UIButton* button = [UIButton buttonWithType:UIButtonTypeCustom];
+            button.tag = codes[i];
+            [button setTitle:titles[i] forState:UIControlStateNormal];
+            button.titleLabel.font = [UIFont systemFontOfSize:22 weight:UIFontWeightSemibold];
+            button.backgroundColor = [UIColor colorWithWhite:0.2 alpha:1.0];
+            button.layer.cornerRadius = 8;
+            button.accessibilityLabel = labels[i];
+            button.accessibilityHint = @"Hold to keep the keyboard arrow pressed.";
+            // Standard UIKit events: DOWN immediately, UP on lift, exit or cancel.
+            [button addTarget:self action:@selector(pressDirection:) forControlEvents:UIControlEventTouchDown | UIControlEventTouchDragEnter];
+            [button addTarget:self action:@selector(releaseDirection:) forControlEvents:UIControlEventTouchUpInside | UIControlEventTouchUpOutside | UIControlEventTouchCancel | UIControlEventTouchDragExit];
+            [buttons addObject:button];
+        }
+        _buttons = [buttons copy];
+        UIStackView* row = [[UIStackView alloc] initWithArrangedSubviews:_buttons];
+        row.spacing = 4;
+        row.distribution = UIStackViewDistributionFillEqually;
+        row.translatesAutoresizingMaskIntoConstraints = NO;
+        [self addSubview:row];
+        [NSLayoutConstraint activateConstraints:@[
+            [row.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
+            [row.trailingAnchor constraintEqualToAnchor:self.trailingAnchor],
+            [row.topAnchor constraintEqualToAnchor:self.topAnchor],
+            [row.bottomAnchor constraintEqualToAnchor:self.bottomAnchor]
+        ]];
     }
     return self;
 }
 
-- (void)setHeldKey:(unsigned short)key {
-    DirectionalKeyTransition transition = DirectionalKeySetHeldKey(&_keyState, key);
-    // Release the old direction first; repeated move events do not repeat DOWN.
-    if (transition.keyUp && self.keyEventHandler) {
-        self.keyEventHandler(transition.keyUp, NO);
+- (void)setKey:(unsigned short)key pressed:(BOOL)pressed {
+    DirectionalKeyTransition transition = DirectionalKeySetPressed(&_keyState, key, pressed);
+    if (transition.keyUp && self.keyEventHandler) self.keyEventHandler(transition.keyUp, NO);
+    if (transition.keyDown && self.keyEventHandler) self.keyEventHandler(transition.keyDown, YES);
+    for (UIButton* button in _buttons) {
+        button.selected = DirectionalKeyIsPressed(&_keyState, (unsigned short)button.tag);
+        button.backgroundColor = button.selected ? [UIColor systemBlueColor] : [UIColor colorWithWhite:0.2 alpha:1.0];
     }
-    if (transition.keyDown && self.keyEventHandler) {
-        self.keyEventHandler(transition.keyDown, YES);
-    }
-
-    switch (key) {
-        case 0x25: _directionLabel.text = @"←"; break;
-        case 0x26: _directionLabel.text = @"↑"; break;
-        case 0x27: _directionLabel.text = @"→"; break;
-        case 0x28: _directionLabel.text = @"↓"; break;
-        default: _directionLabel.text = @"↕ ↔"; break;
-    }
-    self.backgroundColor = key ? [UIColor systemBlueColor] : [UIColor colorWithWhite:0.2 alpha:1.0];
 }
 
-- (BOOL)beginTracking:(UITouch*)touch withEvent:(UIEvent*)event {
-    [self releaseHeldKey];
-    _directionTracking = YES;
-    // Window coordinates keep the origin stable when the finger leaves the bar.
-    _dragOrigin = [touch locationInView:self.window];
-    return YES;
+- (void)pressDirection:(UIButton*)button {
+    [self setKey:(unsigned short)button.tag pressed:YES];
 }
 
-- (BOOL)continueTracking:(UITouch*)touch withEvent:(UIEvent*)event {
-    if (!_directionTracking) {
-        return NO;
-    }
-    CGPoint location = [touch locationInView:self.window];
-    [self setHeldKey:DirectionalKeyForOffset(location.x - _dragOrigin.x,
-                                           location.y - _dragOrigin.y)];
-    return YES;
-}
-
-- (void)endTracking:(UITouch*)touch withEvent:(UIEvent*)event {
-    [self releaseHeldKey];
-}
-
-- (void)cancelTrackingWithEvent:(UIEvent*)event {
-    [self releaseHeldKey];
+- (void)releaseDirection:(UIButton*)button {
+    [self setKey:(unsigned short)button.tag pressed:NO];
 }
 
 - (void)releaseHeldKey {
-    _directionTracking = NO;
-    [self setHeldKey:0];
+    for (UIButton* button in _buttons) {
+        [self setKey:(unsigned short)button.tag pressed:NO];
+    }
 }
 
 - (void)didMoveToWindow {
     [super didMoveToWindow];
-    if (self.window == nil) {
-        [self releaseHeldKey];
-    }
+    if (self.window == nil) [self releaseHeldKey];
 }
 
 @end
