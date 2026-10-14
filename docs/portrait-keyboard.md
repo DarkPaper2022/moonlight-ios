@@ -251,7 +251,31 @@ through the real buttons, verifies immediate DOWN/UP delivery, cancellation,
 re-entry, simultaneous keys, layout and removal cleanup. This checks event
 wiring; physical finger delivery and LiveContainer behavior remain device checks.
 
-Apple builds and publication: pending.
+Apple verification and publication:
+
+- Application source: `ccd40352102c3a34c4cae1e139c74a359a86f859`.
+  Test harness compatibility fix: `ff5c774c12804711b850e760b6ed8dcbed26d631`;
+  there is no application code change between these commits.
+- [CI run 38495396079](https://github.com/DarkPaper2022/moonlight-ios/actions/runs/38495396079):
+  running UIKit button-event test and both portable tests passed; iOS/tvOS
+  Debug and Release simulator builds all passed. The initial harness chose an
+  incompatible iPhone 6s Plus for iOS 26.2; using iPhone 16 Pro corrected setup.
+- [IPA run 38495297031](https://github.com/DarkPaper2022/moonlight-ios/actions/runs/38495297031):
+  unsigned iOS device Release build and packaging passed.
+- Package: `artifacts/Moonlight-PortraitKeyboard-v9.0.16.ipa` in the companion
+  workspace, 3,124,278 bytes; SHA-256:
+  `c92590bf7976dc732a64fb57a44a60a32b4b3b4a4ce4e62e3dbe6285cc871b28`.
+  ZIP integrity, bundle ID/version and four-button/native-landscape code in the
+  binary are verified.
+- Published to Nginx and synchronized configuration, software source, homepage
+  and cache to local 9.0.16. Live HTTPS source and download/installation links
+  match; full IPA download matches size and SHA-256. Historical packages and
+  other applications are preserved. The companion README records both fixes.
+
+Conclusion: native pixel reservation, button-state and actual UIKit event wiring
+checks pass, and both platforms build. Physical touch, LiveContainer behavior
+and landscape sharpness remain device acceptance checks after installing and
+reconnecting.
 
 ## Device acceptance checklist
 
