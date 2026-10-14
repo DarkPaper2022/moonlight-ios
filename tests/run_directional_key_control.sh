@@ -11,8 +11,9 @@ cleanup() {
 }
 trap cleanup EXIT
 runtime_id=$(xcrun simctl list runtimes available -j | python3 -c 'import json,sys; print(next(x["identifier"] for x in json.load(sys.stdin)["runtimes"] if ".iOS-" in x["identifier"]))')
-device_type=$(xcrun simctl list devicetypes -j | python3 -c 'import json,sys; print(next(x["identifier"] for x in reversed(json.load(sys.stdin)["devicetypes"]) if x["name"].startswith("iPhone")))')
+device_type=$(xcrun simctl list devicetypes -j | python3 -c 'import json,sys; print(next(x["identifier"] for x in json.load(sys.stdin)["devicetypes"] if x["name"] == "iPhone 16 Pro"))')
 simulator_id=$(xcrun simctl create MoonlightDirectionTest "$device_type" "$runtime_id")
+[[ "$simulator_id" =~ ^[0-9A-Fa-f-]{36}$ ]]
 xcrun simctl boot "$simulator_id"
 xcrun simctl bootstatus "$simulator_id" -b
 mkdir -p "$test_dir/DirectionTest.app"
