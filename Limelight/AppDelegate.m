@@ -7,6 +7,7 @@
 //
 
 #import "AppDelegate.h"
+#import "DevelopmentDiagnostics.h"
 
 @implementation AppDelegate
 
@@ -29,6 +30,7 @@ static NSString* DB_NAME = @"Limelight_iOS.sqlite";
         _pcUuidToLoad = (NSString*)[shortcut.userInfo objectForKey:@"UUID"];
     }
 #endif
+    [MLDevelopmentDiagnostics shared];
     return YES;
 }
 

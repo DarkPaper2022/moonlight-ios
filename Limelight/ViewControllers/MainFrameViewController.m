@@ -27,6 +27,7 @@
 #import "TemporaryApp.h"
 #import "IdManager.h"
 #import "ConnectionHelper.h"
+#import "DevelopmentDiagnostics.h"
 
 #if !TARGET_OS_TV
 #import "SettingsViewController.h"
@@ -939,6 +940,22 @@ static NSMutableSet* hostList;
 - (void)viewDidLoad
 {
     [super viewDidLoad];
+    __weak MainFrameViewController* weakSelf = self;
+    [MLDevelopmentDiagnostics shared].resumeHandler = ^BOOL {
+        MainFrameViewController* strongSelf = weakSelf;
+        if (!strongSelf || !strongSelf->_selectedHost) return NO;
+        TemporaryApp* running = [strongSelf findRunningApp:strongSelf->_selectedHost];
+        if (!running) return NO;
+        [strongSelf->_appManager stopRetrieving];
+        UIViewController* presenter = strongSelf.view.window.rootViewController;
+        void (^resume)(void) = ^{
+            [strongSelf prepareToStreamApp:running];
+            [strongSelf performSegueWithIdentifier:@"createStreamFrame" sender:nil];
+        };
+        if (presenter.presentedViewController) [presenter dismissViewControllerAnimated:NO completion:resume];
+        else resume();
+        return YES;
+    };
         
 #if !TARGET_OS_TV
     // Set the side bar button action. When it's tapped, it'll show the sidebar.

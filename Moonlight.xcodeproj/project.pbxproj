@@ -137,6 +137,11 @@
 		FBD349621A0089F6002D2A60 /* DataManager.m in Sources */ = {isa = PBXBuildFile; fileRef = FBD349611A0089F6002D2A60 /* DataManager.m */; };
 		FBDE86E019F7A837001C18A8 /* UIComputerView.m in Sources */ = {isa = PBXBuildFile; fileRef = FBDE86DF19F7A837001C18A8 /* UIComputerView.m */; };
 		FBDE86E619F82297001C18A8 /* UIAppView.m in Sources */ = {isa = PBXBuildFile; fileRef = FBDE86E519F82297001C18A8 /* UIAppView.m */; };
+
+		AB9900010000000000000001 /* DevelopmentDiagnostics.m in Sources */ = {isa = PBXBuildFile; fileRef = AB9900020000000000000001 /* DevelopmentDiagnostics.m */; };
+		AB9900010000000000000002 /* DevelopmentDiagnostics.m in Sources */ = {isa = PBXBuildFile; fileRef = AB9900020000000000000001 /* DevelopmentDiagnostics.m */; };
+		AB9900010000000000000003 /* libz.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = AB9900020000000000000004 /* libz.tbd */; };
+		AB9900010000000000000004 /* libz.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = AB9900020000000000000004 /* libz.tbd */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -326,6 +331,11 @@
 		FBDE86DF19F7A837001C18A8 /* UIComputerView.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = UIComputerView.m; sourceTree = "<group>"; };
 		FBDE86E419F82297001C18A8 /* UIAppView.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = UIAppView.h; sourceTree = "<group>"; };
 		FBDE86E519F82297001C18A8 /* UIAppView.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = UIAppView.m; sourceTree = "<group>"; };
+
+		AB9900020000000000000001 /* DevelopmentDiagnostics.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = DevelopmentDiagnostics.m; sourceTree = "<group>"; };
+		AB9900020000000000000002 /* DevelopmentDiagnostics.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = DevelopmentDiagnostics.h; sourceTree = "<group>"; };
+		AB9900020000000000000003 /* NetworkTraceBuffer.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = NetworkTraceBuffer.h; sourceTree = "<group>"; };
+		AB9900020000000000000004 /* libz.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libz.tbd; path = usr/lib/libz.tbd; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -339,6 +349,7 @@
 				98882A0E2AF60FA300C5A11C /* libavutil.a in Frameworks */,
 				F74BEFA42C1A80E400224667 /* OpenSSL in Frameworks */,
 				FB1A67EA21324DF300507771 /* libxml2.tbd in Frameworks */,
+                AB9900010000000000000004 /* libz.tbd in Frameworks */,
 				FB1A67E821324DE300507771 /* libopus.a in Frameworks */,
 				98181BEB2791278F00E43572 /* libSDL2.a in Frameworks */,
 				FB1A67E521324A1F00507771 /* CoreData.framework in Frameworks */,
@@ -352,6 +363,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				9890CF6B203B7EE1006C4B06 /* libxml2.tbd in Frameworks */,
+                AB9900010000000000000003 /* libz.tbd in Frameworks */,
 				98CFB82F1CAD481B0048EF74 /* libmoonlight-common.a in Frameworks */,
 				FB8946ED19F6AFE800339C8A /* libopus.a in Frameworks */,
 				98882A082AF60F7400C5A11C /* libavutil.a in Frameworks */,
@@ -555,6 +567,9 @@
 			children = (
 				FB89461619F646E200339C8A /* Connection.h */,
 				FB89461719F646E200339C8A /* Connection.m */,
+                AB9900020000000000000001 /* DevelopmentDiagnostics.m */,
+                AB9900020000000000000002 /* DevelopmentDiagnostics.h */,
+                AB9900020000000000000003 /* NetworkTraceBuffer.h */,
 				FB89461819F646E200339C8A /* StreamConfiguration.h */,
 				FB89461919F646E200339C8A /* StreamConfiguration.m */,
 				FB89461A19F646E200339C8A /* StreamManager.h */,
@@ -885,6 +900,7 @@
 				FB1A67AF213245C500507771 /* IdManager.m in Sources */,
 				988FCD42293B091B003050E2 /* KeyboardInputField.m in Sources */,
 				FB1A67A3213245BD00507771 /* Connection.m in Sources */,
+                AB9900010000000000000002 /* DevelopmentDiagnostics.m in Sources */,
 				FB1A67A5213245BD00507771 /* StreamConfiguration.m in Sources */,
 				FB1A67A7213245BD00507771 /* StreamManager.m in Sources */,
 				FB1A67A9213245BD00507771 /* VideoDecoderRenderer.m in Sources */,
@@ -906,6 +922,7 @@
 				FB89463419F646E200339C8A /* Utils.m in Sources */,
 				FBDE86E619F82297001C18A8 /* UIAppView.m in Sources */,
 				FB89462F19F646E200339C8A /* Connection.m in Sources */,
+                AB9900010000000000000001 /* DevelopmentDiagnostics.m in Sources */,
 				FB9AFD321A7D867C00872C98 /* AppAssetRetriever.m in Sources */,
 				FB4678FF1A565DAC00377732 /* WakeOnLanManager.m in Sources */,
 				FB53E1431BE5DC4400CD6ECE /* IdManager.m in Sources */,
@@ -1025,7 +1042,7 @@
 					"$(PROJECT_DIR)/libs/SDL2/lib/tvOS-Sim",
 					"$(PROJECT_DIR)/libs/FFmpeg/lib/tvOS-Sim",
 				);
-				MARKETING_VERSION = 9.0.17;
+				MARKETING_VERSION = 9.0.18;
 				MTL_ENABLE_DEBUG_INFO = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.moonlight-stream.Moonlight";
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -1081,7 +1098,7 @@
 					"$(PROJECT_DIR)/libs/SDL2/lib/tvOS-Sim",
 					"$(PROJECT_DIR)/libs/FFmpeg/lib/tvOS-Sim",
 				);
-				MARKETING_VERSION = 9.0.17;
+				MARKETING_VERSION = 9.0.18;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.moonlight-stream.Moonlight";
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -1247,7 +1264,7 @@
 					"$(PROJECT_DIR)/libs/SDL2/lib/iOS-Sim",
 					"$(PROJECT_DIR)/libs/FFmpeg/lib/iOS-Sim",
 				);
-				MARKETING_VERSION = 9.0.17;
+				MARKETING_VERSION = 9.0.18;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.moonlight-stream.Moonlight";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE = "";
@@ -1297,7 +1314,7 @@
 					"$(PROJECT_DIR)/libs/SDL2/lib/iOS-Sim",
 					"$(PROJECT_DIR)/libs/FFmpeg/lib/iOS-Sim",
 				);
-				MARKETING_VERSION = 9.0.17;
+				MARKETING_VERSION = 9.0.18;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.moonlight-stream.Moonlight";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE = "";

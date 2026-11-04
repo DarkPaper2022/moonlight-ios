@@ -48,6 +48,11 @@ jobs:
             -o "$RUNNER_TEMP/test_audio_output_recovery"
           "$RUNNER_TEMP/test_audio_output_recovery"
           CC=clang sh moonlight-common/moonlight-common-c/tests/run_audio_recovery.sh
+          clang -std=c11 -Wall -Wextra -Werror -pthread \
+            -Imoonlight-common/moonlight-common-c/src tests/test_network_trace_buffer.c \
+            -o "$RUNNER_TEMP/test_network_trace_buffer"
+          "$RUNNER_TEMP/test_network_trace_buffer"
+          python3 -m unittest discover -s tools/diagnostics -p 'test_*.py'
 
       - name: Download ${{ matrix.platform }} platform
         run: xcodebuild -downloadPlatform ${{ matrix.platform }}

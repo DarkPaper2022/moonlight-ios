@@ -94,21 +94,31 @@ Application source is pushed to `DarkPaper2022/moonlight-ios`, branch
 `fix/audio-recovery`; the updated common-c pin is on the matching branch in
 `DarkPaper2022/moonlight-common-c`.
 
-Apple verification is blocked: GitHub dispatch returns HTTP 422, `Actions has
-been disabled for this repository`, although repository permissions show enabled
-and workflows show active. Refreshing the already-enabled settings did not lift
-the block. Both push CI and manual iOS dispatch produce no new app run. Common-c
-CI was created but all jobs remained queued at the final check. The precise
-platform/billing restriction is not established, and no account budget or paid
-setting was changed.
+### R5 — Mac build, publication and actual iPad output repair (2026-11-05)
 
-The configured Mac build host `10.47.222.3:2200` returns `No route to host`. Linux
-has no Apple SDK/Xcode. Consequently the Objective-C integration and iOS/tvOS
-builds are **not verified**, and no 9.0.17 IPA has been generated or published.
-Nginx, source configuration and the current installable version remain 9.0.16.
-After Apple build access returns, run CI and dispatch `build-ipa.yml` on
-`fix/audio-recovery`, inspect the package, then publish and verify the complete
-HTTPS download and software source using the established ipa-playground process.
+The Mac is now reachable. Xcode 26.2 built iOS Release for a physical device and
+Debug for the simulator. The unsigned normal 9.0.17 IPA was published to Nginx,
+the software source and homepage; a complete HTTPS download matched its SHA256:
+`86f590c8860694597704cf7282cc88a8de8241452f93011a2adb7e57db957e9a`
+(3,128,892 bytes). GitHub Actions remains unavailable; local Apple builds provide
+the build evidence. tvOS has not been built on this Mac.
+
+An independently signed development 9.0.18 guest runs in LiveContainer3 on the
+physical iPad (iOS 27.0.1), retaining the existing paired host and data. During
+approximately five minutes of actual 2388×1668/60fps streaming, an authenticated
+USB command paused SDL output on its owning decoder thread. The normal output
+watchdog reopened the stopped output, `output_repairs` changed from 0 to 1, and
+decoding continued past 57,200 frames without reconnecting. This crosses the
+old 163.84-second failure boundary. Physical audible output is not observable
+remotely; these are device pipeline/SDL liveness checks.
+
+The trace also shows many PLC frames and repeated timeline re-anchors. Some
+ten-second receive windows advance only about 8.2 seconds of RTP sequence time.
+This is evidence of receiver-observed media pacing differences, not proof of
+host clock failure or radio loss. The packet trace makes this remaining issue
+reproducible without treating every PLC as a network loss. See
+[development diagnostics](development-diagnostics.md) for capture and replayable
+CSV analysis. No new timing heuristic was applied based solely on this sample.
 
 ## Device acceptance
 
@@ -118,5 +128,5 @@ around `[AudioRecovery]`, `[AudioScheduler]` and `AudioBurstGuard`, and note the
 audio loss statistics before reconnecting. Confirm that video/input continue,
 whether output-repair counts increase, and whether audio returns by itself.
 Also test a real audio interruption, output route change, foreground return,
-and a media-services reset where available. Physical device acceptance remains
-pending; a simulator build alone does not establish successful audible recovery.
+and a media-services reset where available. The output pause/reopen path has passed on the physical device; actual audible
+recovery and all natural interruption/network-change cases remain to be checked.

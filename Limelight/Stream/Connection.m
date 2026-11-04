@@ -9,6 +9,7 @@
 #import "Connection.h"
 #import "Utils.h"
 #import "AudioOutputRecovery.h"
+#import "DevelopmentDiagnostics.h"
 
 #import <VideoToolbox/VideoToolbox.h>
 #import <os/log.h>
@@ -20,6 +21,7 @@
 #include "opus_multistream.h"
 
 @implementation Connection {
+    StreamConfiguration* _diagnosticConfig;
     SERVER_INFORMATION _serverInfo;
     STREAM_CONFIGURATION _streamConfig;
     CONNECTION_LISTENER_CALLBACKS _clCallbacks;
@@ -52,6 +54,7 @@ static AudioOutputRecovery audioOutput;
 static SDL_atomic_t audioInterrupted;
 static SDL_atomic_t audioMediaUnavailable;
 static SDL_atomic_t audioRecoveryRequested;
+static SDL_atomic_t audioDebugPauseRequested;
 static SDL_atomic_t audioOutputRebuilding;
 static NSArray* audioSessionObservers;
 static uint64_t totalDecodedFrames = 0;
@@ -146,6 +149,7 @@ void DrStop(void)
 
 int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit)
 {
+    LiEmitNetworkTrace(LI_TRACE_VIDEO_FRAME, 2, 0, 0, decodeUnit->frameNumber, decodeUnit->fullLength, 0, 0);
     int offset = 0;
     int ret;
     unsigned char* data = (unsigned char*) malloc(decodeUnit->fullLength);
@@ -380,6 +384,7 @@ int ArInit(int audioConfiguration, POPUS_MULTISTREAM_CONFIGURATION opusConfig, v
     SDL_AtomicSet(&audioInterrupted, 0);
     SDL_AtomicSet(&audioMediaUnavailable, 0);
     SDL_AtomicSet(&audioRecoveryRequested, 0);
+    SDL_AtomicSet(&audioDebugPauseRequested, 0);
     SDL_AtomicSet(&audioOutputRebuilding, 0);
     totalDecodedFrames = 0;
     totalUnderruns = 0;
@@ -443,6 +448,10 @@ void ArCleanup(void)
 void ArDecodeAndPlaySample(char* sampleData, int sampleLength)
 {
     int decodeLen;
+    if (SDL_AtomicSet(&audioDebugPauseRequested, 0)) {
+        if (audioDevice) SDL_PauseAudioDevice(audioDevice, 1);
+        LiEmitNetworkTrace(LI_TRACE_MARKER, 3, 0, 0, 1, 0, 0, 0);
+    }
     
     // Don't drop packets unless Moonlight's audio queue backlog exceeds the safety threshold.
     if (LiGetPendingAudioDuration() > maxPendingAudioMs) {
@@ -465,6 +474,13 @@ void ArDecodeAndPlaySample(char* sampleData, int sampleLength)
         totalDecodedFrames++;
         if (totalDecodedFrames % 200 == 0) { // Every ~1 second (200 * 5ms = 1000ms)
             int queuedMs = (int)(queuedAfter * 1000 / (audioConfig.sampleRate * sizeof(short) * audioConfig.channelCount));
+            MLDevelopmentDiagnostics* diagnostics = [MLDevelopmentDiagnostics shared];
+            diagnostics.audioState = @{@"decoded_frames":@(totalDecodedFrames), @"queued_ms":@(queuedMs),
+                @"output_repairs":@(audioOutput.recoveries), @"pcm_drops":@(audioOutput.droppedFrames),
+                @"underruns":@(totalUnderruns), @"started":@(audioOutput.started),
+                @"output_status":@(audioDevice ? SDL_GetAudioDeviceStatus(audioDevice) : SDL_AUDIO_STOPPED)};
+            LiEmitNetworkTrace(LI_TRACE_AUDIO_OUTPUT, 1, 0, 0, queuedAfter, (uint32_t)audioOutput.recoveries,
+                               audioDevice ? SDL_GetAudioDeviceStatus(audioDevice) : SDL_AUDIO_STOPPED, 0);
             Log(LOG_I, @"[AudioScheduler] Status: SDL_queued=%d ms, scheduler_pending=%d ms, targetDelay=%d ms, totalFrames=%llu, underruns=%llu, outputRepairs=%llu, pcmDrops=%llu",
                 queuedMs, LiGetPendingAudioDuration(), targetReservoirMs, totalDecodedFrames, totalUnderruns,
                 audioOutput.recoveries, audioOutput.droppedFrames);
@@ -559,6 +575,8 @@ void ClSetControllerLED(uint16_t controllerNumber, uint8_t r, uint8_t g, uint8_t
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0), ^{
         [initLock lock];
         LiStopConnection();
+        [[MLDevelopmentDiagnostics shared] stop];
+        [MLDevelopmentDiagnostics shared].commandHandler = nil;
         [initLock unlock];
     });
 }
@@ -566,6 +584,7 @@ void ClSetControllerLED(uint16_t controllerNumber, uint8_t r, uint8_t g, uint8_t
 -(id) initWithConfig:(StreamConfiguration*)config renderer:(VideoDecoderRenderer*)myRenderer connectionCallbacks:(id<ConnectionCallbacks>)callbacks
 {
     self = [super init];
+    _diagnosticConfig = config;
 
     // Use a lock to ensure that only one thread is initializing
     // or deinitializing a connection at a time.
@@ -672,13 +691,20 @@ void ClSetControllerLED(uint16_t controllerNumber, uint8_t r, uint8_t g, uint8_t
 -(void) main
 {
     [initLock lock];
-    LiStartConnection(&_serverInfo,
+    MLDevelopmentDiagnostics* diagnostics = [MLDevelopmentDiagnostics shared];
+    diagnostics.commandHandler = ^(NSString* command) {
+        if ([command isEqualToString:@"/audio/pause-output"]) SDL_AtomicSet(&audioDebugPauseRequested, 1);
+        if ([command isEqualToString:@"/audio/rebuild"]) SDL_AtomicSet(&audioRecoveryRequested, 1);
+    };
+    [diagnostics startWithConfiguration:_diagnosticConfig];
+    int result = LiStartConnection(&_serverInfo,
                       &_streamConfig,
                       &_clCallbacks,
                       &_drCallbacks,
                       &_arCallbacks,
                       NULL, 0,
                       NULL, 0);
+    if (result != 0) { [diagnostics stop]; diagnostics.commandHandler = nil; }
     [initLock unlock];
 }
 
