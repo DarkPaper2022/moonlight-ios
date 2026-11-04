@@ -38,3 +38,10 @@ PLC frames.
 - A real-network UDP harness (`tests/e2e` in moonlight-common-c)
   reproduces the result over live Wi-Fi: 0 PLC, 0 starvation,
   1-2 rescued frames per second.
+
+## Audio liveness repair (9.0.17)
+
+The existing delay/redundancy design is retained, with moving RTP anchors,
+bounded clock tracking, thread-safe slot ownership and output-only recovery.
+See [audio-recovery.md](audio-recovery.md) for the reproduced long-stream
+failure, frozen-output recovery, verification records and device-test limits.

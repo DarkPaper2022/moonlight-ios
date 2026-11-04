@@ -8,6 +8,7 @@
 
 #import "Connection.h"
 #import "Utils.h"
+#import "AudioOutputRecovery.h"
 
 #import <VideoToolbox/VideoToolbox.h>
 #import <os/log.h>
@@ -47,7 +48,12 @@ static int maxPendingAudioMs = 500;
 static int maxQueuedAudioFrames = 72;
 static int targetReservoirMs = 160;
 static int targetReservoirBytes = 0;
-static BOOL audioPlaybackStarted = NO;
+static AudioOutputRecovery audioOutput;
+static SDL_atomic_t audioInterrupted;
+static SDL_atomic_t audioMediaUnavailable;
+static SDL_atomic_t audioRecoveryRequested;
+static SDL_atomic_t audioOutputRebuilding;
+static NSArray* audioSessionObservers;
 static uint64_t totalDecodedFrames = 0;
 static uint64_t totalUnderruns = 0;
 
@@ -215,6 +221,105 @@ int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit)
                              decodeUnit:decodeUnit];
 }
 
+static BOOL ActivateAudioSession(void) {
+    NSError* error = nil;
+    AVAudioSession* session = [AVAudioSession sharedInstance];
+    if (![session setCategory:AVAudioSessionCategoryPlayback
+                 withOptions:AVAudioSessionCategoryOptionMixWithOthers error:&error] ||
+        ![session setActive:YES error:&error]) {
+        Log(LOG_W, @"[AudioRecovery] Unable to activate audio session: %@", error);
+        return NO;
+    }
+    return YES;
+}
+
+static void ObserveAudioSession(void) {
+    NSNotificationCenter* center = [NSNotificationCenter defaultCenter];
+    AVAudioSession* session = [AVAudioSession sharedInstance];
+    audioSessionObservers = @[
+        [center addObserverForName:AVAudioSessionInterruptionNotification object:session queue:nil usingBlock:^(NSNotification* note) {
+            BOOL began = [note.userInfo[AVAudioSessionInterruptionTypeKey] unsignedIntegerValue] == AVAudioSessionInterruptionTypeBegan;
+            SDL_AtomicSet(&audioInterrupted, began);
+            SDL_AtomicSet(&audioRecoveryRequested, 1);
+            Log(LOG_I, @"[AudioRecovery] Audio interruption %@", began ? @"began" : @"ended");
+        }],
+        [center addObserverForName:AVAudioSessionRouteChangeNotification object:session queue:nil usingBlock:^(NSNotification* note) {
+            NSUInteger reason = [note.userInfo[AVAudioSessionRouteChangeReasonKey] unsignedIntegerValue];
+            if (reason != AVAudioSessionRouteChangeReasonCategoryChange && !SDL_AtomicGet(&audioOutputRebuilding)) {
+                SDL_AtomicSet(&audioRecoveryRequested, 1);
+                Log(LOG_I, @"[AudioRecovery] Audio route changed (reason=%lu)", (unsigned long)reason);
+            }
+        }],
+        [center addObserverForName:AVAudioSessionMediaServicesWereLostNotification object:session queue:nil usingBlock:^(NSNotification* note) {
+            SDL_AtomicSet(&audioMediaUnavailable, 1);
+            SDL_AtomicSet(&audioRecoveryRequested, 1);
+            Log(LOG_W, @"[AudioRecovery] Media services lost");
+        }],
+        [center addObserverForName:AVAudioSessionMediaServicesWereResetNotification object:session queue:nil usingBlock:^(NSNotification* note) {
+            SDL_AtomicSet(&audioMediaUnavailable, 0);
+            SDL_AtomicSet(&audioRecoveryRequested, 1);
+            Log(LOG_I, @"[AudioRecovery] Media services reset");
+        }],
+        [center addObserverForName:UIApplicationDidBecomeActiveNotification object:nil queue:nil usingBlock:^(NSNotification* note) {
+            SDL_AtomicSet(&audioInterrupted, 0);
+            SDL_AtomicSet(&audioRecoveryRequested, 1);
+        }]
+    ];
+}
+
+static bool RestartAudioOutput(void* context) {
+    SDL_AtomicSet(&audioOutputRebuilding, 1);
+    Log(LOG_W, @"[AudioRecovery] Reopening audio output (status=%d, queued=%u, repairs=%llu)",
+        audioDevice ? SDL_GetAudioDeviceStatus(audioDevice) : SDL_AUDIO_STOPPED,
+        audioDevice ? SDL_GetQueuedAudioSize(audioDevice) : 0, audioOutput.recoveries);
+    if (audioDevice) SDL_CloseAudioDevice(audioDevice);
+    audioDevice = 0;
+    SDL_AudioSpec want, have;
+    SDL_zero(want);
+    want.freq = audioConfig.sampleRate;
+    want.format = AUDIO_S16;
+    want.channels = audioConfig.channelCount;
+    want.samples = audioConfig.samplesPerFrame;
+    audioDevice = SDL_OpenAudioDevice(NULL, 0, &want, &have, 0);
+    BOOL ready = audioDevice != 0 && ActivateAudioSession();
+    if (!ready) {
+        Log(LOG_W, @"[AudioRecovery] Reopening failed; will retry: %s", SDL_GetError());
+        if (audioDevice) SDL_CloseAudioDevice(audioDevice);
+        audioDevice = 0;
+    }
+    SDL_AtomicSet(&audioOutputRebuilding, 0);
+    return ready;
+}
+
+static uint32_t AudioOutputQueued(void* context) {
+    return audioDevice ? SDL_GetQueuedAudioSize(audioDevice) : 0;
+}
+
+static bool AudioOutputPlaying(void* context) {
+    return audioDevice && SDL_GetAudioDeviceStatus(audioDevice) == SDL_AUDIO_PLAYING;
+}
+
+static int AudioOutputQueue(void* context, const void* data, uint32_t bytes) {
+    return audioDevice ? SDL_QueueAudio(audioDevice, data, bytes) : -1;
+}
+
+static void AudioOutputClear(void* context) {
+    if (audioDevice) SDL_ClearQueuedAudio(audioDevice);
+}
+
+static void AudioOutputPause(void* context, bool paused) {
+    if (audioDevice) SDL_PauseAudioDevice(audioDevice, paused);
+}
+
+static const AudioOutputOperations audioOutputOps = {
+    .restart = RestartAudioOutput,
+    .queuedBytes = AudioOutputQueued,
+    .playing = AudioOutputPlaying,
+    .queue = AudioOutputQueue,
+    .clear = AudioOutputClear,
+    .pause = AudioOutputPause,
+};
+
 int ArInit(int audioConfiguration, POPUS_MULTISTREAM_CONFIGURATION opusConfig, void* context, int flags)
 {
     int err;
@@ -269,7 +374,12 @@ int ArInit(int audioConfiguration, POPUS_MULTISTREAM_CONFIGURATION opusConfig, v
     NSInteger valPending = [[NSUserDefaults standardUserDefaults] integerForKey:@"maxPendingAudioDurationMs"];
     maxPendingAudioMs = (valPending > 0) ? (int)valPending : 600;
 
-    audioPlaybackStarted = NO;
+    AudioOutputRecoveryInit(&audioOutput, targetReservoirBytes,
+                            (uint32_t)maxQueuedAudioFrames * audioFrameSize);
+    SDL_AtomicSet(&audioInterrupted, 0);
+    SDL_AtomicSet(&audioMediaUnavailable, 0);
+    SDL_AtomicSet(&audioRecoveryRequested, 0);
+    SDL_AtomicSet(&audioOutputRebuilding, 0);
     totalDecodedFrames = 0;
     totalUnderruns = 0;
 
@@ -293,14 +403,20 @@ int ArInit(int audioConfiguration, POPUS_MULTISTREAM_CONFIGURATION opusConfig, v
     // ensuring hardware DAC never starts in an empty starvation state.
     
     // Disable lowering volume of other audio streams (SDL sets AVAudioSessionCategoryOptionDuckOthers by default)
-    [[AVAudioSession sharedInstance] setCategory:AVAudioSessionCategoryPlayback withOptions:AVAudioSessionCategoryOptionMixWithOthers error:nil];
+    if (!ActivateAudioSession()) {
+        ArCleanup();
+        return -1;
+    }
+    ObserveAudioSession();
     
     return 0;
 }
 
 void ArCleanup(void)
 {
-    audioPlaybackStarted = NO;
+    for (id observer in audioSessionObservers) [[NSNotificationCenter defaultCenter] removeObserver:observer];
+    audioSessionObservers = nil;
+    memset(&audioOutput, 0, sizeof(audioOutput));
     totalDecodedFrames = 0;
     totalUnderruns = 0;
     if (opusDecoder != NULL) {
@@ -333,40 +449,22 @@ void ArDecodeAndPlaySample(char* sampleData, int sampleLength)
     decodeLen = opus_multistream_decode(opusDecoder, (unsigned char *)sampleData, sampleLength,
                                         (short*)audioBuffer, audioConfig.samplesPerFrame, 0);
     if (decodeLen > 0) {
-        Uint32 queuedBefore = SDL_GetQueuedAudioSize(audioDevice);
-
-        // Track hardware starvation if playback is active but queue emptied.
-        // NOTE: We do NOT pause audioDevice mid-stream as CoreAudio stop/start causes pops.
-        if (audioPlaybackStarted && queuedBefore == 0) {
-            totalUnderruns++;
-            Log(LOG_W, @"[AudioScheduler] Starvation detected (0 bytes queued, underrun #%llu)", totalUnderruns);
-        }
-
-        // Provide backpressure on the queue to ensure too many frames don't build up in SDL's audio queue.
-        while (SDL_GetQueuedAudioSize(audioDevice) / audioFrameSize > maxQueuedAudioFrames) {
-            SDL_Delay(1);
-        }
-        
-        if (SDL_QueueAudio(audioDevice,
-                           audioBuffer,
-                           sizeof(short) * decodeLen * audioConfig.channelCount) < 0) {
-            Log(LOG_E, @"Failed to queue audio sample: %s\n", SDL_GetError());
-        }
-
-        Uint32 queuedAfter = SDL_GetQueuedAudioSize(audioDevice);
-        // If device is not yet playing and we have reached the initial safety cushion, start playback!
-        if (!audioPlaybackStarted && queuedAfter >= targetReservoirBytes) {
-            SDL_PauseAudioDevice(audioDevice, 0);
-            audioPlaybackStarted = YES;
-            Log(LOG_I, @"[AudioScheduler] Playback started with cushion %u bytes (~%d ms), targetDelay=%d ms",
-                queuedAfter, (int)(queuedAfter * 1000 / (audioConfig.sampleRate * sizeof(short) * audioConfig.channelCount)), targetReservoirMs);
-        }
+        Uint32 queuedBefore = AudioOutputQueued(NULL);
+        if (audioOutput.started && queuedBefore == 0) totalUnderruns++;
+        int result = AudioOutputSubmit(&audioOutput, &audioOutputOps, audioBuffer,
+                                      (uint32_t)(sizeof(short) * decodeLen * audioConfig.channelCount),
+                                      SDL_GetTicks64(),
+                                      SDL_AtomicGet(&audioInterrupted) || SDL_AtomicGet(&audioMediaUnavailable),
+                                      SDL_AtomicSet(&audioRecoveryRequested, 0) != 0);
+        if (result < 0) Log(LOG_W, @"[AudioRecovery] Output unavailable; recovery remains pending");
+        Uint32 queuedAfter = AudioOutputQueued(NULL);
 
         totalDecodedFrames++;
         if (totalDecodedFrames % 200 == 0) { // Every ~1 second (200 * 5ms = 1000ms)
             int queuedMs = (int)(queuedAfter * 1000 / (audioConfig.sampleRate * sizeof(short) * audioConfig.channelCount));
-            Log(LOG_I, @"[AudioScheduler] Status: SDL_queued=%d ms, scheduler_pending=%d ms, targetDelay=%d ms, totalFrames=%llu, underruns=%llu",
-                queuedMs, LiGetPendingAudioDuration(), targetReservoirMs, totalDecodedFrames, totalUnderruns);
+            Log(LOG_I, @"[AudioScheduler] Status: SDL_queued=%d ms, scheduler_pending=%d ms, targetDelay=%d ms, totalFrames=%llu, underruns=%llu, outputRepairs=%llu, pcmDrops=%llu",
+                queuedMs, LiGetPendingAudioDuration(), targetReservoirMs, totalDecodedFrames, totalUnderruns,
+                audioOutput.recoveries, audioOutput.droppedFrames);
         }
     }
 }

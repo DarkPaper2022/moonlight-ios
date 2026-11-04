@@ -22,13 +22,13 @@ client integration details and expected behavior.
 
 ## Fork additions: portrait keyboard streaming
 
-Version 9.0.16 adds an in-stream portrait/landscape button and local rotation
+Version 9.0.17 includes an in-stream portrait/landscape button and local rotation
 when the host window refuses scene rotation. Portrait places the
 video in the upper half and opens the keyboard below. Native resolution uses
 a complete landscape pixel budget from connection start, keeping rotation crisp;
 video preserves its aspect ratio in both layouts. The keyboard bar includes four
-arrow buttons: press and hold to keep a keyboard key down, and release to stop. This feature keeps the
-9.0.11 audio implementation. See [docs/portrait-keyboard.md](docs/portrait-keyboard.md)
+arrow buttons: press and hold to keep a keyboard key down, and release to stop. The audio delay/redundancy design is retained, with
+[9.0.17 audio liveness repairs](docs/audio-recovery.md). See [docs/portrait-keyboard.md](docs/portrait-keyboard.md)
 for controls, build results and the pending device acceptance checks.
 
 [![Moonlight for iOS and tvOS](https://moonlight-stream.org/images/App_Store_Badge_135x40.svg)](https://apps.apple.com/us/app/moonlight-game-streaming/id1000551566)

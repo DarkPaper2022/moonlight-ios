@@ -44,6 +44,10 @@ jobs:
           clang -std=c11 -Wall -Wextra -Werror tests/test_stream_layout.c \
             -o "$RUNNER_TEMP/test_stream_layout"
           "$RUNNER_TEMP/test_stream_layout"
+          clang -std=c11 -Wall -Wextra -Werror tests/test_audio_output_recovery.c \
+            -o "$RUNNER_TEMP/test_audio_output_recovery"
+          "$RUNNER_TEMP/test_audio_output_recovery"
+          CC=clang sh moonlight-common/moonlight-common-c/tests/run_audio_recovery.sh
 
       - name: Download ${{ matrix.platform }} platform
         run: xcodebuild -downloadPlatform ${{ matrix.platform }}

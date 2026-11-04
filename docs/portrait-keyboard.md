@@ -1,8 +1,10 @@
 # Portrait streaming and directional keyboard control
 
-Version: 9.0.16. Base: `v9.0.11-audiodelay` (`0cd848e`).
-The common-c gitlink remains `19d67932d77b5c86c7553b91b0294081573c60e2`;
-this feature does not change the 9.0.11 audio implementation or host configuration.
+Version: 9.0.17. UI base: `v9.0.11-audiodelay` (`0cd848e`).
+9.0.17 keeps the 9.0.16 portrait/keyboard behavior and includes the audio
+liveness fixes described in [audio-recovery.md](audio-recovery.md). Common-c
+now uses the `fix/audio-recovery` branch rather than the original 19d6793 pin.
+Host configuration is not changed by this client feature.
 
 ## Usage
 
