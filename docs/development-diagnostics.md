@@ -151,3 +151,8 @@ Private evidence resides in the development workspace's
 `artifacts/development-debugging/`: device console, status snapshots, collector
 outage timestamps, JSONL observation, analysis JSON and per-event CSV. Private
 configuration and raw app data remain outside the repository.
+
+Further passive diagnosis, AWDL-related working hypotheses, prospective packet
+replay and the bounded five-minute watch are recorded in
+[packet timing investigation](packet-timing-investigation.md). The candidate
+clock policy remains offline; the installed 9.0.18 application is unchanged.

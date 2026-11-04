@@ -1,0 +1,20 @@
+[Unit]
+OnFailure=moonlight-diagnostics-notify.service
+Description=Retain existing Sunshine send-attempt metadata without touching the sender
+
+[Service]
+ExecStart=/usr/bin/python3 %h/.local/libexec/moonlight-diagnostics-watch/host_follow.py --source /tmp/audio_redundancy.log --output %h/.local/state/moonlight-diagnostics/host
+Restart=on-failure
+RestartSec=10
+Nice=10
+CPUQuota=10%
+MemoryMax=64M
+TasksMax=8
+NoNewPrivileges=true
+PrivateNetwork=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=%h/.local/state/moonlight-diagnostics
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,11 @@
+[Unit]
+Description=Summarize naturally observed Moonlight traces every five minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+AccuracySec=15s
+Unit=moonlight-diagnostics-watch.service
+
+[Install]
+WantedBy=timers.target

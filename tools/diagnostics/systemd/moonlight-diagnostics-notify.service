@@ -1,0 +1,13 @@
+[Unit]
+Description=Report failure of the owned passive Moonlight diagnostics tasks
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 %h/.local/libexec/moonlight-diagnostics-watch/watch.py --config %h/.config/moonlight-diagnostics/watch.json --notify-failure
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=%h/.local/state/moonlight-diagnostics
+MemoryMax=64M
+TasksMax=8
+TimeoutStartSec=30

@@ -1,0 +1,19 @@
+[Unit]
+OnFailure=moonlight-diagnostics-notify.service
+Description=Passive Moonlight packet trace summaries
+After=moonlight-diagnostics.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 %h/.local/libexec/moonlight-diagnostics-watch/watch.py --config %h/.config/moonlight-diagnostics/watch.json
+Nice=10
+IOSchedulingClass=idle
+CPUQuota=25%
+MemoryMax=384M
+TasksMax=16
+TimeoutStartSec=120
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=%h/.local/state/moonlight-diagnostics
