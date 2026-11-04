@@ -1,6 +1,6 @@
 # Portrait streaming and directional keyboard control
 
-Version: 9.0.17. UI base: `v9.0.11-audiodelay` (`0cd848e`).
+Development version: 9.0.17. UI base: `v9.0.11-audiodelay` (`0cd848e`).
 9.0.17 keeps the 9.0.16 portrait/keyboard behavior and includes the audio
 liveness fixes described in [audio-recovery.md](audio-recovery.md). Common-c
 now uses the `fix/audio-recovery` branch rather than the original 19d6793 pin.

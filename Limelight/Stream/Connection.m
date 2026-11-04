@@ -56,6 +56,7 @@ static SDL_atomic_t audioOutputRebuilding;
 static NSArray* audioSessionObservers;
 static uint64_t totalDecodedFrames = 0;
 static uint64_t totalUnderruns = 0;
+static uint64_t lastAudioDecodeErrorLogMs = 0;
 
 static VideoDecoderRenderer* renderer;
 
@@ -382,6 +383,7 @@ int ArInit(int audioConfiguration, POPUS_MULTISTREAM_CONFIGURATION opusConfig, v
     SDL_AtomicSet(&audioOutputRebuilding, 0);
     totalDecodedFrames = 0;
     totalUnderruns = 0;
+    lastAudioDecodeErrorLogMs = 0;
 
     Log(LOG_I, @"Audio playout scheduler configured: playoutDelayMs=%d, sdlSafetyCushionBytes=%d (~%d ms), maxPendingMs=%d, maxQueuedFrames=%d",
         targetReservoirMs, targetReservoirBytes, (safetyFrames * frameDurationMs), maxPendingAudioMs, maxQueuedAudioFrames);
@@ -419,6 +421,7 @@ void ArCleanup(void)
     memset(&audioOutput, 0, sizeof(audioOutput));
     totalDecodedFrames = 0;
     totalUnderruns = 0;
+    lastAudioDecodeErrorLogMs = 0;
     if (opusDecoder != NULL) {
         opus_multistream_decoder_destroy(opusDecoder);
         opusDecoder = NULL;
@@ -465,6 +468,12 @@ void ArDecodeAndPlaySample(char* sampleData, int sampleLength)
             Log(LOG_I, @"[AudioScheduler] Status: SDL_queued=%d ms, scheduler_pending=%d ms, targetDelay=%d ms, totalFrames=%llu, underruns=%llu, outputRepairs=%llu, pcmDrops=%llu",
                 queuedMs, LiGetPendingAudioDuration(), targetReservoirMs, totalDecodedFrames, totalUnderruns,
                 audioOutput.recoveries, audioOutput.droppedFrames);
+        }
+    } else if (decodeLen < 0) {
+        uint64_t now = SDL_GetTicks64();
+        if (lastAudioDecodeErrorLogMs == 0 || now - lastAudioDecodeErrorLogMs >= 1000) {
+            Log(LOG_W, @"[AudioRecovery] Opus decode failed: %s (%d)", opus_strerror(decodeLen), decodeLen);
+            lastAudioDecodeErrorLogMs = now;
         }
     }
 }

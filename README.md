@@ -22,7 +22,7 @@ client integration details and expected behavior.
 
 ## Fork additions: portrait keyboard streaming
 
-Version 9.0.17 includes an in-stream portrait/landscape button and local rotation
+Development version 9.0.17 includes an in-stream portrait/landscape button and local rotation
 when the host window refuses scene rotation. Portrait places the
 video in the upper half and opens the keyboard below. Native resolution uses
 a complete landscape pixel budget from connection start, keeping rotation crisp;

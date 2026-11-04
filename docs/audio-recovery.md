@@ -82,9 +82,33 @@ second, and recovered output starts with fresh buffered PCM. Tests pass under
 ASan/UBSan. These are failure-injected device operations; actual CoreAudio
 interruption/reset delivery and physical sound have not been tested.
 
-### R4 — Apple builds and publication
+### R4 — library lifecycle, Apple builds and publication (2026-11-05)
 
-Pending.
+The actual Linux Debug shared library and a second ASan/UBSan-instrumented build
+both pass 500 initialization/teardown cycles with a concurrent statistics reader,
+including reads before initialization and after cleanup. A reader gate prevents
+locking a destroyed/uninitialized stream mutex. This is an actual library test,
+not the injected-device model.
+
+Application source is pushed to `DarkPaper2022/moonlight-ios`, branch
+`fix/audio-recovery`; the updated common-c pin is on the matching branch in
+`DarkPaper2022/moonlight-common-c`.
+
+Apple verification is blocked: GitHub dispatch returns HTTP 422, `Actions has
+been disabled for this repository`, although repository permissions show enabled
+and workflows show active. Refreshing the already-enabled settings did not lift
+the block. Both push CI and manual iOS dispatch produce no new app run. Common-c
+CI was created but all jobs remained queued at the final check. The precise
+platform/billing restriction is not established, and no account budget or paid
+setting was changed.
+
+The configured Mac build host `10.47.222.3:2200` returns `No route to host`. Linux
+has no Apple SDK/Xcode. Consequently the Objective-C integration and iOS/tvOS
+builds are **not verified**, and no 9.0.17 IPA has been generated or published.
+Nginx, source configuration and the current installable version remain 9.0.16.
+After Apple build access returns, run CI and dispatch `build-ipa.yml` on
+`fix/audio-recovery`, inspect the package, then publish and verify the complete
+HTTPS download and software source using the established ipa-playground process.
 
 ## Device acceptance
 
